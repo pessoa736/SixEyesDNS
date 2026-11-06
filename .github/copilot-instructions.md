@@ -22,12 +22,16 @@ erro de reconstrução para sinalizar consultas suspeitas.
 - Produzir a pontuação de anomalia, preferencialmente MSE, e o rótulo
   `normal` ou `suspeita` com limiar ajustado na validação.
 - Treinar o autoencoder somente com dados normais.
-- Usar domínios populares e consultas do ambiente Docker local como dados
-  normais.
+- Usar domínios sintéticos inspirados em serviços, plataformas e instituições
+  como dados normais, sempre em zonas reservadas como `.test`.
 - Gerar dados anômalos somente por scripts locais, codificando bytes aleatórios
   em subdomínios com base32, hex, base64 e variações.
 - Separar treino, validação e teste sem vazamento entre conjuntos, domínios ou
   famílias de exemplos.
+- Remover a zona artificial `.test` antes de calcular as features, para evitar
+  viés de distribuição quando o modelo receber domínios reais.
+- Não usar IP, cliente, perfil de risco ou qualquer metadado de origem como
+  entrada do modelo; o objetivo é analisar o domínio.
 
 ## Modelos e avaliação
 
@@ -51,34 +55,30 @@ SixEyesDNS/
 ├── data/
 │   ├── raw/
 │   └── processed/
-├── src/
-│   ├── generate_data.py
-│   ├── features.py
-│   ├── models.py
-│   ├── baselines.py
-│   ├── train.py
-│   ├── evaluate.py
-│   └── demo.py
-├── notebooks/
+├── source/
+│   ├── process_raw.py
+│   └── split_dataset.py
+├── scripts/
 ├── results/
 └── docker/
 ```
 
-O ambiente de demonstração deve usar Docker, com dnsmasq registrando consultas
-em log. O script de demonstração deve ler o log, extrair atributos e classificar
-consultas em tempo quase real.
+O laboratório local usa Docker com `dnsmasq` registrando consultas. A execução
+principal do treinamento e da avaliação deve ser feita por arquivos Python e
+shell, especialmente no NPAD; Jupyter é opcional.
 
 ## Convenções de implementação
 
 - Responder e documentar em português.
 - Usar Python 3, tipagem e docstrings curtas.
 - Manter nomes de variáveis e funções em inglês.
-- Fixar sementes de `random`, `numpy` e `torch`.
+- Fixar sementes de `random`, `numpy` e `torch` quando o treinamento for
+  implementado.
 - Configurar scripts por argumentos de linha de comando; não usar caminhos
   absolutos ou fixos no código.
 - Preferir soluções simples, legíveis e adequadas ao prazo curto.
-- Reutilizar funções de extração e pré-processamento para evitar diferenças
-  entre treino, avaliação e demonstração.
+- Reutilizar `source/process_raw.py` e a mesma normalização de domínio para
+  evitar diferenças entre treino, avaliação e demonstração.
 - Antes de sugerir código novo, procurar a estrutura e os helpers existentes.
 - Validar mudanças com os testes, linters ou comandos de execução disponíveis.
 

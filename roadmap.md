@@ -2,25 +2,34 @@
 
 ## Estado atual
 
-O projeto está na fase de fundação. O script `create-envs.sh` já cria o ambiente Python com PyTorch, NumPy, pandas, scikit-learn e ferramentas auxiliares. O arquivo `VL.py` verifica as versões instaladas e a disponibilidade de CPU/GPU.
+A infraestrutura de coleta e preparação está funcionando:
 
-Ainda precisam ser implementados os módulos de geração de dados, extração de atributos, treinamento, avaliação e demonstração com Docker.
+- ambiente Conda definido em `environment.yml`;
+- laboratório Docker com `dnsmasq` isolado em rede interna;
+- gerador de consultas normais e anômalas sintéticas;
+- 300 exemplos processados em `data/processed/dataset.csv`;
+- splits versionados em `data/processed/splits/`;
+- normalização da zona `.test` antes da extração de atributos;
+- scripts shell para executar Docker, recriar recursos e atualizar os dados.
+
+O próximo marco é implementar e avaliar o autoencoder em PyTorch.
 
 ## Objetivo
 
 Construir um sistema defensivo e educacional para detectar consultas DNS suspeitas usando um autoencoder treinado somente com consultas normais. A classificação será baseada no erro de reconstrução, com comparação contra métodos baseline.
 
-## Fase 1 — Estrutura e configuração
+## Fase 1 — Ambiente e configuração
 
-Criar a estrutura inicial:
+Status: concluída.
+
+Estrutura atual:
 
 ```text
 data/raw/
 data/processed/
 results/
-src/
+source/
 scripts/
-configs/
 requirements.txt
 environment.yml
 ```
@@ -35,9 +44,11 @@ Implementar:
 
 **Validação:** executar um diagnóstico básico e registrar versões, dispositivo disponível e semente utilizada.
 
-## Fase 2 — Geração e organização dos dados
+## Fase 2 — Coleta, geração e preparação dos dados
 
-Criar `src/generate_data.py` para gerar dados sintéticos exclusivamente no ambiente local:
+Status: concluída para o primeiro dataset.
+
+O gerador atual está em `docker/generator/gerador_queries.py` e produz:
 
 - domínios normais;
 - subdomínios com codificação base32;
@@ -57,7 +68,7 @@ Separar os dados em:
 
 ## Fase 3 — Engenharia de atributos
 
-Criar `src/features.py` com uma função única e reutilizável para extrair:
+Criar `source/features.py` com uma função única e reutilizável para extrair:
 
 - tamanho total do domínio;
 - entropia de Shannon dos caracteres;
@@ -81,7 +92,7 @@ Adicionar testes para:
 
 ## Fase 4 — Modelo principal
 
-Criar `src/models.py` com um autoencoder denso pequeno em PyTorch:
+Criar `source/models.py` com um autoencoder denso pequeno em PyTorch:
 
 - camada de entrada compatível com os atributos;
 - espaço latente reduzido;
@@ -89,7 +100,7 @@ Criar `src/models.py` com um autoencoder denso pequeno em PyTorch:
 - cálculo do erro MSE;
 - salvamento do modelo e dos parâmetros de normalização.
 
-Criar `src/train.py` para:
+Criar `source/train.py` para:
 
 - treinar somente com dados normais;
 - registrar a perda de treino e validação;
@@ -100,7 +111,7 @@ Criar `src/train.py` para:
 
 ## Fase 5 — Baselines
 
-Criar `src/baselines.py` e comparar o autoencoder com:
+Criar `source/baselines.py` e comparar o autoencoder com:
 
 1. limiar simples baseado em entropia;
 2. Isolation Forest;
@@ -112,7 +123,7 @@ Todos os métodos devem usar as mesmas divisões de dados e, quando aplicável, 
 
 ## Fase 6 — Avaliação e generalização
 
-Criar `src/evaluate.py` para produzir:
+Criar `source/evaluate.py` para produzir:
 
 - matriz de confusão;
 - precisão;
@@ -176,7 +187,7 @@ docker/
 └── dnsmasq.conf
 ```
 
-Implementar `src/demo.py` para uso local, quando houver acesso ao log do
+Implementar `source/demo.py` para uso local, quando houver acesso ao log do
 dnsmasq:
 
 - ler o log do dnsmasq;
@@ -230,10 +241,10 @@ Esse marco deve ser concluído antes da demonstração local opcional, pois esta
 
 ## Critérios de conclusão
 
-- [ ] Ambiente reproduzível e documentado.
-- [ ] Dados sintéticos gerados localmente.
-- [ ] Separação entre treino, validação e teste sem vazamento.
-- [ ] Extração de atributos coberta por testes.
+- [x] Ambiente reproduzível e documentado.
+- [x] Dados sintéticos gerados localmente.
+- [x] Separação entre treino, validação e teste sem vazamento.
+- [x] Extração de atributos implementada.
 - [ ] Autoencoder treinado somente com dados normais.
 - [ ] Limiar definido usando validação.
 - [ ] Comparação com entropia e Isolation Forest.
