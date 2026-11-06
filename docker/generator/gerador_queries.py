@@ -21,6 +21,17 @@ ANOMALY_RATE = float(os.getenv("ANOMALY_RATE", "0.5"))
 NORMAL_SERVICES = ("www", "api", "mail", "cdn", "status", "auth", "metrics")
 NORMAL_REGIONS = ("us-east", "us-west", "eu-west", "sa-east", "ap-south")
 NORMAL_VERSIONS = ("v1", "v2", "v3")
+NORMAL_PLATFORMS = (
+	("google", "com"),
+	("youtube", "com"),
+	("x", "com"),
+	("portal", "com.br"),
+	("orbita", "io"),
+	("nuvem", "co"),
+	("lumen", "ia"),
+	("github", "com"),
+	("wikipedia", "org"),
+)
 FICTIONAL_NAMES = (
 	("luma", "ferraz"),
 	("nilo", "ventura"),
@@ -29,6 +40,8 @@ FICTIONAL_NAMES = (
 	("mila", "soren"),
 	("zeca", "dourado"),
 )
+
+
 def random_bytes(size: int = 18) -> bytes:
 	return bytes(RANDOM.randrange(256) for _ in range(size))
 
@@ -38,7 +51,7 @@ def normal_domain(index: int) -> str:
 	region = NORMAL_REGIONS[index % len(NORMAL_REGIONS)]
 	version = NORMAL_VERSIONS[index % len(NORMAL_VERSIONS)]
 	first_name, last_name = FICTIONAL_NAMES[index % len(FICTIONAL_NAMES)]
-	pattern = index % 9
+	pattern = index % 18
 
 	if pattern == 0:
 		return f"{service}.normal.test"
@@ -56,7 +69,27 @@ def normal_domain(index: int) -> str:
 		return f"{first_name}.{last_name}.normal.test"
 	if pattern == 7:
 		return f"{first_name}-{index % 8}.{service}.normal.test"
-	return f"{first_name}.{region}.{service}.normal.test"
+	if pattern == 8:
+		return f"{first_name}.{region}.{service}.normal.test"
+
+	platform, suffix = NORMAL_PLATFORMS[index % len(NORMAL_PLATFORMS)]
+	if pattern == 9:
+		return f"www.{platform}.{suffix}.test"
+	if pattern == 10:
+		return f"video.{platform}.{suffix}.test"
+	if pattern == 11:
+		return f"api.{platform}.{suffix}.test"
+	if pattern == 12:
+		return f"{first_name}.{platform}.{suffix}.test"
+	if pattern == 13:
+		return f"portal.{platform}.{suffix}.test"
+	if pattern == 14:
+		return f"cdn-{index % 12}.{platform}.{suffix}.test"
+	if pattern == 15:
+		return f"auth.{platform}.{suffix}.test"
+	if pattern == 16:
+		return f"status.{platform}.{suffix}.test"
+	return f"telemetry.{region}.{platform}.{suffix}.test"
 
 
 def anomalous_domain(index: int) -> tuple[str, str]:
