@@ -1,0 +1,4 @@
+# Dependências instaladas via pip durante a criação do ambiente Conda.
+# Em máquinas com GPU, substitua torch pela variante recomendada pelo NPAD.
+torch
+opencv-python

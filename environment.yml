@@ -1,0 +1,16 @@
+name: sixeyesdns
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - numpy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - pyyaml
+  - pytest
+  - pip
+  - pip:
+      - -r requirements.txt
