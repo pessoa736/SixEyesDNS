@@ -1,0 +1,9 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir dnspython==2.7.0
+
+COPY gerador_queries.py .
+
+ENTRYPOINT ["python", "gerador_queries.py"]

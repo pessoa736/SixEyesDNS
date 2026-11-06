@@ -1,0 +1,42 @@
+
+
+
+
+
+
+services:
+
+  dnsmasq:
+    build: ./docker/dnsmasq
+    volumes:
+      - ./data/raw/dnsmasq:/var/log/dnsmasq
+    ports:
+      - "127.0.0.1:6767:53/udp"
+      - "127.0.0.1:6767:53/tcp"
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.2
+
+  generator:
+    build: ./docker/generator
+    depends_on:
+      - dnsmasq
+    networks:
+      unlimited-void-net: null
+    environment:
+      DNS_SERVER: dnsmasq
+      DNS_PORT: "53"
+      QUERY_COUNT: "100"
+      SEED: "42"
+      ANOMALY_RATE: "0.5"
+    volumes:
+      - ./data/raw:/data
+
+networks:
+  unlimited-void-net:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+      
