@@ -32,6 +32,11 @@ NORMAL_PLATFORMS = (
 	("github", "com"),
 	("wikipedia", "org"),
 )
+NORMAL_INSTITUTIONAL_DOMAINS = (
+	"sigaa.ufrn.edu.br.test",
+	"pessoa736.github.io.test",
+	"multprova.ufrn.br.test",
+)
 FICTIONAL_NAMES = (
 	("luma", "ferraz"),
 	("nilo", "ventura"),
@@ -51,7 +56,7 @@ def normal_domain(index: int) -> str:
 	region = NORMAL_REGIONS[index % len(NORMAL_REGIONS)]
 	version = NORMAL_VERSIONS[index % len(NORMAL_VERSIONS)]
 	first_name, last_name = FICTIONAL_NAMES[index % len(FICTIONAL_NAMES)]
-	pattern = index % 18
+	pattern = index % 21
 
 	if pattern == 0:
 		return f"{service}.normal.test"
@@ -89,7 +94,9 @@ def normal_domain(index: int) -> str:
 		return f"auth.{platform}.{suffix}.test"
 	if pattern == 16:
 		return f"status.{platform}.{suffix}.test"
-	return f"telemetry.{region}.{platform}.{suffix}.test"
+	if pattern == 17:
+		return f"telemetry.{region}.{platform}.{suffix}.test"
+	return NORMAL_INSTITUTIONAL_DOMAINS[index % len(NORMAL_INSTITUTIONAL_DOMAINS)]
 
 
 def anomalous_domain(index: int) -> tuple[str, str]:
