@@ -16,7 +16,10 @@ O próximo marco é implementar e avaliar o autoencoder em PyTorch.
 
 ## Progresso atual
 
-### Concluído
+Os itens abaixo foram implementados e validados manualmente. Essa marcação não
+substitui uma suíte de testes automatizados.
+
+### Validação manual concluída
 
 - [x] Ambiente Conda e dependências via pip configurados.
 - [x] Laboratório Docker com `dnsmasq` e rede interna funcionando.
@@ -29,7 +32,7 @@ O próximo marco é implementar e avaliar o autoencoder em PyTorch.
 - [x] Separação sem sobreposição entre treino, validação e teste.
 - [x] Scripts shell para coleta e atualização dos dados.
 
-### Ainda pendente
+### Implementação e validação pendentes
 
 - [ ] Implementar o autoencoder em PyTorch.
 - [ ] Treinar somente com exemplos normais.
@@ -268,10 +271,10 @@ Esse marco deve ser concluído antes da demonstração local opcional, pois esta
 
 ## Critérios de conclusão
 
-- [x] Ambiente reproduzível e documentado.
-- [x] Dados sintéticos gerados localmente.
-- [x] Separação entre treino, validação e teste sem vazamento.
-- [x] Extração de atributos implementada.
+- [x] Ambiente reproduzível e documentado, com validação manual.
+- [x] Dados sintéticos gerados localmente, com validação manual.
+- [x] Separação entre treino, validação e teste sem vazamento, verificada por script.
+- [x] Extração de atributos implementada e exercitada no processamento real.
 - [ ] Autoencoder treinado somente com dados normais.
 - [ ] Limiar definido usando validação.
 - [ ] Comparação com entropia e Isolation Forest.
