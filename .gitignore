@@ -219,3 +219,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+archive/
+
+# Dados gerados pelo laboratório DNS
+data/raw/
+data/processed/
