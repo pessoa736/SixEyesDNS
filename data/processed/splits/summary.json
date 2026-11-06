@@ -3,22 +3,22 @@
   "input": "data/processed/dataset.csv",
   "splits": {
     "train": {
-      "rows": 103,
-      "domains": 50,
-      "normal": 103,
+      "rows": 3333,
+      "domains": 88,
+      "normal": 3333,
       "suspeita": 0
     },
     "validation": {
-      "rows": 89,
-      "domains": 85,
-      "normal": 14,
-      "suspeita": 75
+      "rows": 3226,
+      "domains": 2567,
+      "normal": 677,
+      "suspeita": 2549
     },
     "test": {
-      "rows": 108,
-      "domains": 87,
-      "normal": 33,
-      "suspeita": 75
+      "rows": 3441,
+      "domains": 2569,
+      "normal": 892,
+      "suspeita": 2549
     }
   }
 }

@@ -7,7 +7,7 @@ A infraestrutura de coleta e preparação está funcionando:
 - ambiente Conda definido em `environment.yml`;
 - laboratório Docker com `dnsmasq` isolado em rede interna;
 - gerador de consultas normais e anômalas sintéticas;
-- 300 exemplos processados em `data/processed/dataset.csv`;
+- 10.000 exemplos processados em `data/processed/dataset.csv`;
 - splits versionados em `data/processed/splits/`;
 - normalização da zona `.test` antes da extração de atributos;
 - scripts shell para executar Docker, recriar recursos e atualizar os dados.
@@ -28,7 +28,7 @@ substitui uma suíte de testes automatizados.
 - [x] Domínios variados, incluindo serviços, instituições e diferentes sufixos.
 - [x] Remoção da zona artificial `.test` antes das features.
 - [x] Extração de atributos numéricos dos domínios.
-- [x] Dataset processado com 300 exemplos.
+- [x] Dataset processado com 10.000 exemplos.
 - [x] Separação sem sobreposição entre treino, validação e teste.
 - [x] Scripts shell para coleta e atualização dos dados.
 

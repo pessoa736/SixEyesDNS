@@ -56,7 +56,7 @@ Para destruir e recriar os containers e a rede do projeto:
 ```
 
 O número padrão da coleta é definido no `docker-compose.yml`. A coleta atual
-usa 300 consultas sintéticas.
+usa 10.000 consultas sintéticas.
 
 ## Processamento
 
