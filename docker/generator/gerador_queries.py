@@ -18,6 +18,7 @@ QUERY_INTERVAL = float(os.getenv("QUERY_INTERVAL", "0.2"))
 LABELS_PATH = Path(os.getenv("LABELS_PATH", "/data/query_labels.csv"))
 RANDOM = random.Random(int(os.getenv("SEED", "42")))
 ANOMALY_RATE = float(os.getenv("ANOMALY_RATE", "0.5"))
+QUERY_TYPES = ("A", "AAAA", "CNAME")
 NORMAL_SERVICES = ("www", "api", "mail", "cdn", "status", "auth", "metrics")
 NORMAL_REGIONS = ("us-east", "us-west", "eu-west", "sa-east", "ap-south")
 NORMAL_VERSIONS = ("v1", "v2", "v3")
@@ -113,8 +114,8 @@ def anomalous_domain(index: int) -> tuple[str, str]:
 	return f"{encoded}.tunnel.test", family
 
 
-def send_query(domain: str) -> None:
-	request = dns.message.make_query(domain, "A")
+def send_query(domain: str, query_type: str) -> None:
+	request = dns.message.make_query(domain, query_type)
 	server_address = socket.gethostbyname(DNS_SERVER)
 	response = dns.query.udp(request, server_address, port=DNS_PORT, timeout=3)
 	response.rcode()
@@ -125,9 +126,10 @@ def main() -> None:
 
 	with LABELS_PATH.open("w", newline="") as labels_file:
 		writer = csv.writer(labels_file)
-		writer.writerow(("query", "family", "label", "seed"))
+		writer.writerow(("query", "query_type", "family", "label", "seed"))
 
 		for index in range(QUERY_COUNT):
+			query_type = QUERY_TYPES[index % len(QUERY_TYPES)]
 			if RANDOM.random() >= ANOMALY_RATE:
 				domain = normal_domain(index)
 				family = "normal"
@@ -137,8 +139,11 @@ def main() -> None:
 				label = "suspeita"
 
 			try:
-				send_query(domain)
-				print(f"consulta={domain} familia={family} rotulo={label}", flush=True)
+				send_query(domain, query_type)
+				print(
+					f"consulta={domain} tipo={query_type} familia={family} rotulo={label}",
+					flush=True,
+				)
 			except dns.exception.DNSException as error:
 				print(f"falha={domain} erro={error}", flush=True)
 				continue
@@ -146,6 +151,7 @@ def main() -> None:
 			writer.writerow(
 				(
 					domain,
+					query_type,
 					family,
 					label,
 					os.getenv("SEED", "42"),

@@ -3,21 +3,21 @@
   "input": "data/processed/dataset.csv",
   "splits": {
     "train": {
-      "rows": 102,
-      "domains": 81,
-      "normal": 102,
+      "rows": 103,
+      "domains": 50,
+      "normal": 103,
       "suspeita": 0
     },
     "validation": {
-      "rows": 97,
-      "domains": 92,
-      "normal": 22,
+      "rows": 89,
+      "domains": 85,
+      "normal": 14,
       "suspeita": 75
     },
     "test": {
-      "rows": 101,
-      "domains": 94,
-      "normal": 26,
+      "rows": 108,
+      "domains": 87,
+      "normal": 33,
       "suspeita": 75
     }
   }

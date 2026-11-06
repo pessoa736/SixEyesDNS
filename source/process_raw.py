@@ -8,7 +8,7 @@ from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 
-QUERY_PATTERN = re.compile(r"query\[[^]]+\]\s+(\S+)\s+from\s+(\S+)")
+QUERY_PATTERN = re.compile(r"query\[([^]]+)\]\s+(\S+)\s+from\s+(\S+)")
 CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789")
 LAB_SUFFIXES = (".test", ".example", ".invalid")
 
@@ -27,16 +27,16 @@ def read_queries(log_path: Path) -> list[dict[str, str]]:
         for line in log_file:
             match = QUERY_PATTERN.search(line)
             if match:
-                queries.append({"query": match.group(1)})
+                queries.append({"query_type": match.group(1), "query": match.group(2)})
     return queries
 
 
-def read_labels(labels_paths: list[Path]) -> dict[str, deque[dict[str, str]]]:
-    labels_by_query: dict[str, deque[dict[str, str]]] = defaultdict(deque)
+def read_labels(labels_paths: list[Path]) -> dict[tuple[str, str], deque[dict[str, str]]]:
+    labels_by_query: dict[tuple[str, str], deque[dict[str, str]]] = defaultdict(deque)
     for labels_path in labels_paths:
         with labels_path.open(newline="", encoding="utf-8") as labels_file:
             for row in csv.DictReader(labels_file):
-                labels_by_query[row["query"]].append(row)
+                labels_by_query[(row["query"], row.get("query_type", "A"))].append(row)
     return labels_by_query
 
 
@@ -86,7 +86,11 @@ def process(log_path: Path, labels_paths: list[Path], output_path: Path) -> int:
     ignored_queries = []
 
     for query in queries:
-        candidates = labels_by_query.get(query["query"], deque())
+        candidates = labels_by_query.get(
+            (query["query"], query["query_type"]), deque()
+        )
+        if not candidates:
+            candidates = labels_by_query.get((query["query"], "A"), deque())
         if not candidates:
             ignored_queries.append(query["query"])
             continue
@@ -95,6 +99,7 @@ def process(log_path: Path, labels_paths: list[Path], output_path: Path) -> int:
         row = extract_features(query["query"])
         row.update(
             {
+                "query_type": query["query_type"],
                 "family": label["family"],
                 "label": label["label"],
                 "seed": label["seed"],

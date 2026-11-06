@@ -9,6 +9,7 @@ eventos com `dnsmasq` e transforma os logs em atributos numéricos.
 - Docker e `dnsmasq`: captura local e isolada;
 - gerador Python: cria domínios normais e famílias sintéticas base32, hex e
 	base64;
+- gerador Python: alterna consultas DNS dos tipos `A`, `AAAA` e `CNAME`;
 - `source/process_raw.py`: extrai atributos e remove a zona artificial `.test`;
 - `source/split_dataset.py`: cria treino, validação e teste sem sobreposição de
 	domínios;
@@ -81,8 +82,9 @@ python source/split_dataset.py \
 
 O dataset processado contém atributos como tamanho, entropia, proporção de
 dígitos, quantidade de rótulos, maior rótulo e frequências de caracteres. A
-coluna `label` é usada apenas para avaliação; o autoencoder deve ser treinado
-somente com exemplos `normal`.
+coluna `query_type` registra a cobertura do tráfego e não deve ser usada como
+feature do domínio. A coluna `label` é usada apenas para avaliação; o
+autoencoder deve ser treinado somente com exemplos `normal`.
 
 Arquivos principais:
 
