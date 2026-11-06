@@ -10,6 +10,7 @@ from pathlib import Path
 
 QUERY_PATTERN = re.compile(r"query\[[^]]+\]\s+(\S+)\s+from\s+(\S+)")
 CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789")
+LAB_SUFFIXES = (".test", ".example", ".invalid")
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,15 +48,23 @@ def shannon_entropy(value: str) -> float:
     return -sum((count / length) * math.log2(count / length) for count in counts.values())
 
 
-def extract_features(domain: str) -> dict[str, float | int | str]:
+def remove_lab_suffix(domain: str) -> str:
     normalized = domain.rstrip(".").lower()
+    for suffix in LAB_SUFFIXES:
+        if normalized.endswith(suffix):
+            return normalized[: -len(suffix)]
+    return normalized
+
+
+def extract_features(domain: str) -> dict[str, float | int | str]:
+    normalized = remove_lab_suffix(domain)
     labels = [label for label in normalized.split(".") if label]
     character_counts = Counter(normalized)
     alphanumeric_count = sum(character_counts[character] for character in "abcdefghijklmnopqrstuvwxyz0123456789")
     digit_count = sum(character_counts[digit] for digit in "0123456789")
 
     features: dict[str, float | int | str] = {
-        "query": domain,
+        "query": normalized,
         "total_length": len(normalized),
         "entropy": round(shannon_entropy(normalized), 8),
         "digit_ratio": round(digit_count / len(normalized), 8) if normalized else 0.0,
