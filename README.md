@@ -1,5 +1,7 @@
 # SixEyesDNS
 
+[**Abrir Roadmap do projeto**](roadmap.md)
+
 Projeto educacional e defensivo para detectar consultas DNS anômalas com
 autoencoders. O laboratório gera consultas sintéticas localmente, registra os
 eventos com `dnsmasq` e transforma os logs em atributos numéricos.
