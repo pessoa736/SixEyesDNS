@@ -14,6 +14,33 @@ A infraestrutura de coleta e preparação está funcionando:
 
 O próximo marco é implementar e avaliar o autoencoder em PyTorch.
 
+## Progresso atual
+
+### Concluído
+
+- [x] Ambiente Conda e dependências via pip configurados.
+- [x] Laboratório Docker com `dnsmasq` e rede interna funcionando.
+- [x] Geração sintética de domínios normais e suspeitos.
+- [x] Consultas DNS dos tipos `A`, `AAAA` e `CNAME`.
+- [x] Domínios variados, incluindo serviços, instituições e diferentes sufixos.
+- [x] Remoção da zona artificial `.test` antes das features.
+- [x] Extração de atributos numéricos dos domínios.
+- [x] Dataset processado com 300 exemplos.
+- [x] Separação sem sobreposição entre treino, validação e teste.
+- [x] Scripts shell para coleta e atualização dos dados.
+
+### Ainda pendente
+
+- [ ] Implementar o autoencoder em PyTorch.
+- [ ] Treinar somente com exemplos normais.
+- [ ] Definir o limiar de anomalia usando validação.
+- [ ] Implementar os baselines de entropia e Isolation Forest.
+- [ ] Calcular precisão, recall, F1, ROC-AUC e matriz de confusão.
+- [ ] Avaliar generalização entre famílias de codificação.
+- [ ] Executar o treinamento no NPAD via Conda e shell.
+- [ ] Documentar limitações, falhas e falsos positivos.
+- [ ] Implementar demonstração local opcional com `dnsmasq`.
+
 ## Objetivo
 
 Construir um sistema defensivo e educacional para detectar consultas DNS suspeitas usando um autoencoder treinado somente com consultas normais. A classificação será baseada no erro de reconstrução, com comparação contra métodos baseline.
@@ -251,5 +278,5 @@ Esse marco deve ser concluído antes da demonstração local opcional, pois esta
 - [ ] Métricas e matriz de confusão salvas.
 - [ ] Generalização entre diferentes codificações avaliada.
 - [ ] Execução completa via Conda e shell funcionando no NPAD.
-- [ ] Demonstração local com dnsmasq documentada, caso seja viável.
+- [ ] Demonstração local com `dnsmasq` documentada, caso seja viável.
 - [ ] Limitações e resultados negativos documentados.
