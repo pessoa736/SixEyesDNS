@@ -1,0 +1,24 @@
+{
+  "seed": 42,
+  "input": "data/processed/dataset.csv",
+  "splits": {
+    "train": {
+      "rows": 31,
+      "domains": 29,
+      "normal": 31,
+      "suspeita": 0
+    },
+    "validation": {
+      "rows": 34,
+      "domains": 32,
+      "normal": 8,
+      "suspeita": 26
+    },
+    "test": {
+      "rows": 35,
+      "domains": 33,
+      "normal": 9,
+      "suspeita": 26
+    }
+  }
+}
