@@ -27,7 +27,7 @@ services:
     environment:
       DNS_SERVER: dnsmasq
       DNS_PORT: "53"
-      QUERY_COUNT: "10000"
+      QUERY_COUNT: "50000"
       QUERY_INTERVAL: "0.01"
       SEED: "42"
       ANOMALY_RATE: "0.5"

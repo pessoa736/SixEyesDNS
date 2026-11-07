@@ -2,15 +2,17 @@
 
 import argparse
 import csv
-import math
 import re
-from collections import Counter, defaultdict, deque
+from collections import defaultdict, deque
 from pathlib import Path
+
+if __package__:
+    from .features import extract_features
+else:
+    from features import extract_features
 
 
 QUERY_PATTERN = re.compile(r"query\[([^]]+)\]\s+(\S+)\s+from\s+(\S+)")
-CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789")
-LAB_SUFFIXES = (".test", ".example", ".invalid")
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,45 +42,6 @@ def read_labels(labels_paths: list[Path]) -> dict[tuple[str, str], deque[dict[st
     return labels_by_query
 
 
-def shannon_entropy(value: str) -> float:
-    if not value:
-        return 0.0
-    counts = Counter(value.lower())
-    length = len(value)
-    return -sum((count / length) * math.log2(count / length) for count in counts.values())
-
-
-def remove_lab_suffix(domain: str) -> str:
-    normalized = domain.rstrip(".").lower()
-    for suffix in LAB_SUFFIXES:
-        if normalized.endswith(suffix):
-            return normalized[: -len(suffix)]
-    return normalized
-
-
-def extract_features(domain: str) -> dict[str, float | int | str]:
-    normalized = remove_lab_suffix(domain)
-    labels = [label for label in normalized.split(".") if label]
-    character_counts = Counter(normalized)
-    alphanumeric_count = sum(character_counts[character] for character in "abcdefghijklmnopqrstuvwxyz0123456789")
-    digit_count = sum(character_counts[digit] for digit in "0123456789")
-
-    features: dict[str, float | int | str] = {
-        "query": normalized,
-        "total_length": len(normalized),
-        "entropy": round(shannon_entropy(normalized), 8),
-        "digit_ratio": round(digit_count / len(normalized), 8) if normalized else 0.0,
-        "label_count": len(labels),
-        "max_label_length": max((len(label) for label in labels), default=0),
-        "alphanumeric_ratio": round(alphanumeric_count / len(normalized), 8) if normalized else 0.0,
-    }
-
-    for character in CHARACTERS:
-        features[f"char_freq_{character}"] = round(character_counts[character] / len(normalized), 8) if normalized else 0.0
-
-    return features
-
-
 def process(log_path: Path, labels_paths: list[Path], output_path: Path) -> int:
     queries = read_queries(log_path)
     labels_by_query = read_labels(labels_paths)
@@ -96,7 +59,11 @@ def process(log_path: Path, labels_paths: list[Path], output_path: Path) -> int:
             continue
 
         label = candidates.popleft()
-        row = extract_features(query["query"])
+        row = extract_features(
+            query["query"],
+            query_type=query["query_type"],
+            family=label["family"],
+        )
         row.update(
             {
                 "query_type": query["query_type"],

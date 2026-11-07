@@ -10,6 +10,10 @@ LABELS_PATH="${2:-data/raw/query_labels.csv}"
 OUTPUT_PATH="${3:-data/processed/dataset.csv}"
 SPLITS_DIR="${4:-data/processed/splits}"
 SEED="${SEED:-42}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+if [[ "$PYTHON_BIN" == "python" && -x "$ROOT_DIR/.venv-amd/bin/python" ]]; then
+    PYTHON_BIN="$ROOT_DIR/.venv-amd/bin/python"
+fi
 
 if [[ ! -f "$LOG_PATH" ]]; then
     echo "Erro: log DNS não encontrado: $LOG_PATH" >&2
@@ -21,12 +25,12 @@ if [[ ! -f "$LABELS_PATH" ]]; then
     exit 1
 fi
 
-python source/process_raw.py \
+"$PYTHON_BIN" source/process_raw.py \
     --log "$LOG_PATH" \
     --labels "$LABELS_PATH" \
     --output "$OUTPUT_PATH"
 
-python source/split_dataset.py \
+"$PYTHON_BIN" source/split_dataset.py \
     --input "$OUTPUT_PATH" \
     --output-dir "$SPLITS_DIR" \
     --seed "$SEED"
