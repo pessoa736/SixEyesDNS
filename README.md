@@ -57,8 +57,10 @@ Para destruir e recriar os containers e a rede do projeto:
 ./scripts/docker-recreate.sh
 ```
 
-O número padrão da coleta é definido no `docker-compose.yml`. A coleta atual
-usa 10.000 consultas sintéticas.
+O número padrão da coleta é definido no `docker-compose.yml`. A coleta agora
+usa 50.000 consultas sintéticas, cinco vezes a quantidade anterior. Isso
+precisa ser acompanhado de maior variedade de domínios normais; repetir as
+mesmas strings não aumenta a diversidade do treinamento.
 
 ## Processamento
 
@@ -83,10 +85,83 @@ python source/split_dataset.py \
 ```
 
 O dataset processado contém atributos como tamanho, entropia, proporção de
-dígitos, quantidade de rótulos, maior rótulo e frequências de caracteres. A
-coluna `query_type` registra a cobertura do tráfego e não deve ser usada como
-feature do domínio. A coluna `label` é usada apenas para avaliação; o
-autoencoder deve ser treinado somente com exemplos `normal`.
+dígitos, quantidade de rótulos, maior rótulo e frequências de caracteres.
+`query_type` é convertido nos indicadores `is_A`, `is_AAAA`, `is_CNAME`,
+`is_TXT`, `is_NS`, `is_MX` e `is_PTR`. `family` também é expandida em
+`is_family_normal`, `is_family_base32`, `is_family_hex` e `is_family_base64`
+para análise do dataset. Os indicadores de `family` não entram no modelo, pois
+essa coluna descreve a forma sintética da anomalia e causaria vazamento do
+rótulo; os indicadores de tipo DNS são usados como entrada. A coluna `label` é
+usada apenas para avaliação; o autoencoder deve ser treinado somente com
+exemplos `normal`.
+
+Treinar o autoencoder híbrido principal:
+
+```bash
+python source/train.py \
+	--splits-dir data/processed/splits \
+	--output-dir results/autoencoder
+```
+
+Ou, usando o script reprodutível:
+
+```bash
+./scripts/train-model.sh --epochs 200
+```
+
+Se `results/autoencoder/model.pt` já existir, o script o carrega
+automaticamente e continua o treinamento. O valor de `--epochs` representa
+épocas adicionais:
+
+```bash
+./scripts/train-model.sh --epochs 50
+```
+
+Para ignorar o modelo existente e começar do zero:
+
+```bash
+./scripts/train-model.sh --fresh --epochs 200
+```
+
+O treino combina a reconstrução textual e numérica, ajusta a padronização
+somente nos normais de treino e salva o modelo, o histórico e as métricas em
+`results/autoencoder/`.
+
+Depois do treinamento, gerar os gráficos:
+
+```bash
+./scripts/plot-training.sh
+```
+
+Durante o treino, cada época mostra no terminal as perdas, accuracy e limiar
+P99. O treinamento executa exatamente a quantidade definida em `--epochs`.
+O arquivo `losses.png` contém dois subplots:
+perdas e accuracy. São salvos `losses.png`, `metrics.png`,
+`confusion-matrices.png`, `score-distributions.png` e `thresholds.png` no diretório
+de resultados. Para abrir as janelas interativas, use
+`./scripts/plot-training.sh --show`.
+
+O plot também gera `test-samples.png`, com o domínio de entrada, a string
+reconstruída, a classificação e o erro por atributo numérico. A quantidade de
+amostras pode ser alterada com `--test-samples 10`.
+
+O `score-distributions.png` mostra a visão completa em escala logarítmica e
+um zoom linear dos scores baixos, com o limiar P99 marcado.
+
+Os scripts oficiais são `process-data.sh`, `train-model.sh` e
+`plot-training.sh`. O treinamento e a plotagem usam exclusivamente o modelo
+autoencoder.
+
+## Arquitetura principal
+
+A arquitetura principal combina tokens de caracteres com as 49 features numéricas.
+O ramo textual preserva as posições após as convoluções, e o decoder produz
+logits diretamente para as 64 posições do domínio, sem `mean pooling` nem
+interpolação. O modelo reconstrói o domínio e as features; o score é
+a soma dos erros textual e numérico normalizados pelos normais de validação.
+Dropout e `weight_decay` reduzem a memorização dos poucos domínios normais
+disponíveis. O valor padrão de `weight_decay` é `1e-4` e pode ser alterado com
+`--weight-decay`.
 
 Arquivos principais:
 
@@ -100,6 +175,10 @@ data/processed/splits/summary.json
 
 O dataset processado sintético é versionado. Logs, rótulos brutos e arquivos
 gerados em `data/raw/` permanecem ignorados pelo Git.
+
+O dataset atual contém muitos exemplos repetidos e apenas 88 domínios normais
+únicos no treino. Esse número deve ser aumentado antes de interpretar os
+resultados como generalização para domínios reais.
 
 ## Estrutura
 

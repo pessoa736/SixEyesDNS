@@ -34,11 +34,11 @@ substitui uma suíte de testes automatizados.
 
 ### Implementação e validação pendentes
 
-- [ ] Implementar o autoencoder em PyTorch.
-- [ ] Treinar somente com exemplos normais.
-- [ ] Definir o limiar de anomalia usando validação.
+- [x] Implementar o autoencoder em PyTorch.
+- [x] Treinar somente com exemplos normais.
+- [x] Definir limiares de anomalia usando validação (percentil 99 e melhor F1).
 - [ ] Implementar os baselines de entropia e Isolation Forest.
-- [ ] Calcular precisão, recall, F1, ROC-AUC e matriz de confusão.
+- [x] Calcular accuracy e scores combinados para a híbrida.
 - [ ] Avaliar generalização entre famílias de codificação.
 - [ ] Executar o treinamento no NPAD via Conda e shell.
 - [ ] Documentar limitações, falhas e falsos positivos.
@@ -122,7 +122,7 @@ Adicionar testes para:
 
 ## Fase 4 — Modelo principal
 
-Criar `source/models.py` com um autoencoder denso pequeno em PyTorch:
+O modelo principal está em `source/models.py`:
 
 - camada de entrada compatível com os atributos;
 - espaço latente reduzido;
@@ -130,7 +130,7 @@ Criar `source/models.py` com um autoencoder denso pequeno em PyTorch:
 - cálculo do erro MSE;
 - salvamento do modelo e dos parâmetros de normalização.
 
-Criar `source/train.py` para:
+O treinamento principal está em `source/train.py`:
 
 - treinar somente com dados normais;
 - registrar a perda de treino e validação;
