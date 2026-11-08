@@ -31,7 +31,7 @@ services:
     depends_on:
       - service-api
     ports:
-      - "127.0.0.1:8080:80"
+      - "8080:80"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/dashboard:/usr/share/nginx/html/dashboard:ro

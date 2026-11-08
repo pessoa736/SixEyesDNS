@@ -168,6 +168,17 @@ testada no ambiente antes de ser apresentada como funcional. Se a porta do
 host não funcionar, a demonstração deve gerar o tráfego dentro da rede
 interna ou usar o modo offline.
 
+Em ambientes Docker Desktop ou VS Code nos quais a porta publicada pelo
+daemon não aparece no host, use o servidor local do dashboard:
+
+```bash
+./scripts/dashboard.sh
+```
+
+Esse servidor escuta somente em `127.0.0.1:8080` e lê o resumo produzido pelo
+gerador em `data/raw/dashboard/`; ele não substitui a rede interna do
+laboratório.
+
 ### Processamento
 
 ```bash
