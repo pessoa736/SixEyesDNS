@@ -33,30 +33,30 @@ O requisito acadêmico está em
 
 ## Fase 1 — Estrutura e schema
 
-Status: parcialmente implementada.
+Status: implementada; modelos retreinados sem os indicadores de tipo DNS.
 
 - [x] Trabalhar na branch `ajustes-u3`.
 - [x] Manter os módulos executáveis com `python -m source.<modulo>` nos
       scripts de treino e plotagem.
 - [x] Manter `source/features.py` como origem dos atributos usados no treino.
-- [ ] Adicionar `source/__init__.py`.
-- [ ] Consolidar completamente em `source/features.py` a normalização,
+- [x] Adicionar `source/__init__.py`.
+- [x] Consolidar completamente em `source/features.py` a normalização,
       tokenização, vocabulário e os 42 atributos numéricos.
-- [ ] Separar explicitamente features e metadados.
-- [ ] Rejeitar automaticamente `label`, `family`, `query_type`, `seed`, IP e
+- [x] Separar explicitamente features e metadados.
+- [x] Rejeitar automaticamente `label`, `family`, `query_type`, `seed`, IP e
       cliente na matriz de entrada.
-- [ ] Remover os indicadores de tipo DNS (`is_A`, `is_TXT` etc.) das features,
+- [x] Remover os indicadores de tipo DNS (`is_A`, `is_TXT` etc.) das features,
       pois derivam de `query_type`, que é metadado; retreinar os modelos após
       a correção.
-- [ ] Fazer `process_raw.py` e `split_dataset.py` funcionarem com
+- [x] Fazer `process_raw.py` e `split_dataset.py` funcionarem com
       `python -m source.<modulo>`.
-- [ ] Adicionar `--holdout-family`.
-- [ ] Expandir `summary.json` com linhas e domínios únicos por split, classe e
+- [x] Adicionar `--holdout-family`.
+- [x] Expandir `summary.json` com linhas e domínios únicos por split, classe e
       família.
-- [ ] Adicionar testes de determinismo, ausência de metadados e ausência de
+- [x] Adicionar testes de determinismo, ausência de metadados e ausência de
       interseção.
-- [ ] Mover `VL.py` para `scripts/check_env.py`.
-- [ ] Fixar dependências e incluir pytest, scikit-learn e matplotlib quando
+- [x] Mover `VL.py` para `scripts/check_env.py`.
+- [x] Fixar dependências e incluir pytest, scikit-learn e matplotlib quando
       realmente usados.
 
 ## Fase 2 — Dados
