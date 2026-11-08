@@ -1,24 +1,109 @@
 {
   "seed": 42,
   "input": "data/processed/dataset.csv",
+  "holdout_family": null,
   "splits": {
     "train": {
-      "rows": 3573,
-      "domains": 1546,
-      "normal": 3573,
-      "suspeita": 0
+      "rows": 3482,
+      "domains": 2049,
+      "normal": 3482,
+      "suspeita": 0,
+      "by_label": {
+        "normal": {
+          "rows": 3482,
+          "domains": 2049
+        }
+      },
+      "by_family": {
+        "normal": {
+          "rows": 3482,
+          "domains": 2049
+        }
+      }
     },
     "validation": {
-      "rows": 3364,
-      "domains": 2369,
-      "normal": 574,
-      "suspeita": 2790
+      "rows": 3085,
+      "domains": 2437,
+      "normal": 703,
+      "suspeita": 2382,
+      "by_label": {
+        "normal": {
+          "rows": 703,
+          "domains": 439
+        },
+        "suspeita": {
+          "rows": 2382,
+          "domains": 1998
+        }
+      },
+      "by_family": {
+        "base32": {
+          "rows": 522,
+          "domains": 522
+        },
+        "base64": {
+          "rows": 499,
+          "domains": 499
+        },
+        "hex": {
+          "rows": 495,
+          "domains": 495
+        },
+        "low_entropy": {
+          "rows": 387,
+          "domains": 3
+        },
+        "mixed": {
+          "rows": 479,
+          "domains": 479
+        },
+        "normal": {
+          "rows": 703,
+          "domains": 439
+        }
+      }
     },
     "test": {
-      "rows": 3063,
-      "domains": 2371,
-      "normal": 780,
-      "suspeita": 2283
+      "rows": 3344,
+      "domains": 2438,
+      "normal": 749,
+      "suspeita": 2595,
+      "by_label": {
+        "normal": {
+          "rows": 749,
+          "domains": 440
+        },
+        "suspeita": {
+          "rows": 2595,
+          "domains": 1998
+        }
+      },
+      "by_family": {
+        "base32": {
+          "rows": 486,
+          "domains": 486
+        },
+        "base64": {
+          "rows": 498,
+          "domains": 498
+        },
+        "hex": {
+          "rows": 505,
+          "domains": 505
+        },
+        "low_entropy": {
+          "rows": 602,
+          "domains": 5
+        },
+        "mixed": {
+          "rows": 504,
+          "domains": 504
+        },
+        "normal": {
+          "rows": 749,
+          "domains": 440
+        }
+      }
     }
   }
 }
