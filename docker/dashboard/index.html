@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SixEyesDNS — laboratório</title>
+  <style>
+    body { background:#101827; color:#e5e7eb; font:16px system-ui,sans-serif; margin:0; }
+    main { max-width:1100px; margin:0 auto; padding:32px; }
+    h1 { margin-top:0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+    .card { background:#1f2937; border:1px solid #374151; border-radius:10px; padding:18px; }
+    .value { font-size:2rem; font-weight:700; color:#93c5fd; }
+    table { border-collapse:collapse; width:100%; margin-top:24px; }
+    th,td { border-bottom:1px solid #374151; padding:10px; text-align:left; }
+    .muted { color:#9ca3af; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>SixEyesDNS</h1>
+  <p class="muted">Dashboard local do tráfego sintético e defensivo.</p>
+  <section class="grid">
+    <div class="card"><div class="muted">Consultas</div><div id="queries" class="value">0</div></div>
+    <div class="card"><div class="muted">Normais</div><div id="normal" class="value">0</div></div>
+    <div class="card"><div class="muted">Suspeitas</div><div id="suspeita" class="value">0</div></div>
+    <div class="card"><div class="muted">Domínios únicos</div><div id="domains" class="value">0</div></div>
+  </section>
+  <table>
+    <thead><tr><th>Família</th><th>Consultas</th><th>Domínios únicos</th></tr></thead>
+    <tbody id="families"></tbody>
+  </table>
+  <p id="updated" class="muted"></p>
+</main>
+<script>
+async function update() {
+  const response = await fetch('/traffic_summary.json?ts=' + Date.now());
+  if (!response.ok) return;
+  const data = await response.json();
+  document.querySelector('#queries').textContent = data.total_queries;
+  document.querySelector('#normal').textContent = data.labels.normal || 0;
+  document.querySelector('#suspeita').textContent = data.labels.suspeita || 0;
+  document.querySelector('#domains').textContent = data.unique_domains;
+  document.querySelector('#families').innerHTML = Object.entries(data.families)
+    .map(([name, value]) => `<tr><td>${name}</td><td>${value.queries}</td><td>${value.unique_domains}</td></tr>`)
+    .join('');
+  document.querySelector('#updated').textContent = 'Atualizado em ' + data.updated_at;
+}
+update();
+setInterval(update, 2000);
+</script>
+</body>
+</html>

@@ -1,212 +1,237 @@
 # SixEyesDNS
 
-[**Abrir Roadmap do projeto**](roadmap.md)
+Projeto educacional e defensivo da Unidade III de **Aprendizado Profundo
+2026.2**, categoria 7 — *Autoencoders para Anomalias e Ruído*. O objetivo é
+detectar consultas DNS suspeitas, representando somente o domínio e usando o
+erro de reconstrução de um autoencoder treinado com consultas normais.
 
-Projeto educacional e defensivo para detectar consultas DNS anômalas com
-autoencoders. O laboratório gera consultas sintéticas localmente, registra os
-eventos com `dnsmasq` e transforma os logs em atributos numéricos.
+Os requisitos da disciplina estão em
+[doc/info/Descricao_do_Trabalho.md](doc/info/Descricao_do_Trabalho.md). O
+trabalho escrito será consolidado neste README.
 
-## Arquitetura atual
+## Introdução
 
-- Docker e `dnsmasq`: captura local e isolada;
-- gerador Python: cria domínios normais e famílias sintéticas base32, hex e
-	base64;
-- gerador Python: alterna consultas DNS dos tipos `A`, `AAAA` e `CNAME`;
-- `source/process_raw.py`: extrai atributos e remove a zona artificial `.test`;
-- `source/split_dataset.py`: cria treino, validação e teste sem sobreposição de
-	domínios;
-- Conda: ambiente principal para execução no NPAD;
-- scripts shell: execução e atualização reproduzíveis.
+Tunelamento DNS pode ocultar dados em nomes de domínio e dificultar a
+separação entre consultas legítimas e suspeitas. Este projeto implementa um
+laboratório local e isolado para estudar esse problema sem tráfego real:
+consultas normais são inspiradas em serviços, plataformas e instituições
+fictícias, enquanto as anomalias são strings codificadas geradas localmente.
 
-O IP presente no log do `dnsmasq` é somente informação operacional. Ele não é
-incluído no dataset processado, pois o objetivo é analisar o domínio.
+O sistema deve aprender a distribuição lexical das consultas normais e usar
+um limiar de erro para sinalizar `normal` ou `suspeita`. IP, cliente,
+perfil de risco, tipo DNS e qualquer outro metadado de origem não fazem parte
+do objetivo do modelo.
 
-## Ambiente Conda
+## Estado verificado do repositório
 
-Criar e ativar o ambiente:
+- O processamento está em `source/`, e o gerador está em
+  `docker/generator/gerador_queries.py`.
+- O dataset versionado possui 50.000 registros e 58 colunas.
+- A parte lexical contém 42 atributos: 6 escalares e 36 frequências de
+  caracteres `a-z` e `0-9`.
+- O schema atual também contém indicadores de `query_type` e `family`, além
+  dos metadados `query`, `query_type`, `family`, `label` e `seed`.
+- Os domínios processados não mantêm o sufixo artificial `.test`.
+- O gerador atual produz somente 126 domínios normais únicos para 50.000
+  consultas, causando muitas repetições. A nova geração amplia combinações
+  determinísticas de serviços, regiões, ambientes e plataformas, incluindo
+  casos difíceis com subdomínios semelhantes a identificadores de CDN.
+- Os splits atuais não compartilham domínios entre si, mas repetem registros
+  dentro dos próprios conjuntos. O `summary.json` ainda precisa ser ampliado
+  para detalhar domínios únicos por classe e família.
+- O log versionado contém consultas de execuções concatenadas: há 60.000
+  consultas reconhecidas para 50.000 rótulos. Portanto, o alinhamento deve ser
+  verificado antes de regenerar o dataset.
+
+Essas observações são diagnóstico, não resultados de desempenho. Não há ainda
+uma tabela final de métricas válida para o relatório.
+
+## Desenvolvimento e técnicas
+
+### Laboratório e dados
+
+O laboratório usa Docker com `dnsmasq` em uma rede interna. O compose define
+`QUERY_COUNT=50000`, `ANOMALY_RATE=0.5` e `SEED=42`. O tráfego deve permanecer
+local, usando a zona reservada `.test`; o dnsmasq não possui servidores
+upstream configurados.
+
+As famílias anômalas atuais são:
+
+- base32;
+- hexadecimal;
+- base64 URL-safe.
+
+O gerador normal usa combinações determinísticas de serviços fictícios
+(`web`, `api`, `catalog`, `auth`, `metrics`, `mail`, `cdn` e `dashboard`),
+regiões, ambientes e plataformas. Também produz casos difíceis com labels
+curtos, índices de nós e identificadores hash-like. Esses casos mantêm
+`family=normal` e são identificados pelo metadado `profile=normal_hard`.
+
+As anomalias sintéticas incluem base32, hexadecimal, base64 URL-safe,
+payloads de baixa entropia e codificações mistas. O arquivo de rótulos registra
+sequência, timestamp UTC, serviço e perfil gerador para auditoria do
+laboratório; esses campos são metadados e não entram no modelo.
+
+O laboratório também sobe um Nginx em `127.0.0.1:8080`, uma API fictícia
+`service-api` e um dashboard local. O dashboard exibe contagens de consultas,
+rótulos, famílias e domínios únicos a partir de
+`data/raw/dashboard/traffic_summary.json`. A API é acessível pelo Nginx em
+`/api/health` e `/api/catalog`.
+
+### Processamento e atributos
+
+O fluxo atual é:
+
+```bash
+./scripts/process-data.sh
+```
+
+Ele executa `source/process_raw.py` e `source/split_dataset.py` sobre os
+arquivos em `data/raw/`. A implementação futura deve transformar
+`source/features.py` na única fonte da verdade para:
+
+- normalização do domínio, removendo `.test`;
+- atributos lexicais;
+- tokenização de caracteres;
+- normalização numérica ajustada somente nos normais de treino.
+
+As features do modelo devem ser uma lista explícita de 42 atributos. `label`,
+`family`, `query_type`, `seed`, IP e cliente devem permanecer separados como
+metadados e passar por uma verificação automática contra vazamento.
+
+### Separação dos dados
+
+O treino deve conter somente consultas `normal`. Validação e teste podem conter
+normais e anomalias, mas não podem compartilhar domínios. O split deve falhar
+se houver interseção e deve registrar em `summary.json` linhas e domínios
+únicos por split, classe e família.
+
+O casamento entre log e rótulos precisa considerar execuções concatenadas e
+duplicatas. O arquivo de rótulos agora tem timestamp, mas o log do dnsmasq não
+preserva o mesmo formato de timestamp com precisão suficiente. Não se deve
+assumir que a ordem global do log corresponda a uma única execução.
+
+### Modelos planejados
+
+Serão comparados:
+
+1. **DenseAE**: autoencoder denso sobre os 42 atributos, com score MSE;
+2. **CharAE**: autoencoder de caracteres, com perda de entropia cruzada por
+   posição;
+3. **HybridAE**: combinação dos ramos numérico e de caracteres;
+4. limiar simples de entropia;
+5. Isolation Forest sobre os mesmos 42 atributos.
+
+O treinamento deve usar seed 42, CPU como caminho suportado, early stopping e
+somente exemplos normais. Os limiares serão calculados na validação, incluindo
+percentil 99 dos normais e melhor F1 supervisionado, sem escolher limiar no
+teste.
+
+### Avaliação
+
+O pipeline deve gerar em `results/` métricas, CSVs e figuras para ROC-AUC,
+PR-AUC, precisão, recall, F1, FPR, matriz de confusão, recall por família e
+análise de prevalência. Também deve avaliar leave-one-family-out e explicar
+erros por atributo ou caractere.
+
+## Como reproduzir
+
+### Ambiente
 
 ```bash
 conda env create -f environment.yml
 conda activate sixeyesdns
 ```
 
-O `environment.yml` instala as dependências gerais e chama o
-`requirements.txt` para os pacotes instalados via pip. A instalação do PyTorch
-pode precisar ser ajustada conforme CUDA/ROCm e os módulos disponíveis no NPAD.
+As versões das dependências devem permanecer fixadas em
+[requirements.txt](requirements.txt) e [environment.yml](environment.yml).
 
-## Coleta local
-
-O laboratório usa somente zonas sintéticas terminadas em `.test`, por exemplo:
-
-```text
-www.google.com.test
-sigaa.ufrn.edu.br.test
-abc123.tunnel.test
-```
-
-O sufixo `.test` evita consultas acidentais a domínios reais. Iniciar a coleta:
+### Coleta local
 
 ```bash
 ./scripts/docker-run.sh
 docker compose wait generator
 ```
 
-Para destruir e recriar os containers e a rede do projeto:
+Durante a coleta, abra <http://127.0.0.1:8080> para acompanhar o tráfego
+sintético. O dashboard não envia dados para a Internet e não substitui as
+métricas do modelo.
+
+Para recriar os containers:
 
 ```bash
 ./scripts/docker-recreate.sh
 ```
 
-O número padrão da coleta é definido no `docker-compose.yml`. A coleta agora
-usa 50.000 consultas sintéticas, cinco vezes a quantidade anterior. Isso
-precisa ser acompanhado de maior variedade de domínios normais; repetir as
-mesmas strings não aumenta a diversidade do treinamento.
+A publicação `127.0.0.1:6767:53` está configurada no compose, mas deve ser
+testada no ambiente antes de ser apresentada como funcional. Se a porta do
+host não funcionar, a demonstração deve gerar o tráfego dentro da rede
+interna ou usar o modo offline.
 
-## Processamento
-
-Depois que o gerador terminar, atualizar o dataset e os splits:
+### Processamento
 
 ```bash
 ./scripts/process-data.sh
 ```
 
-O script executa:
+O fluxo futuro deve ser executável também como módulos:
 
 ```bash
-python source/process_raw.py \
-	--log data/raw/dnsmasq/dnsmasq.log \
-	--labels data/raw/query_labels.csv \
-	--output data/processed/dataset.csv
-
-python source/split_dataset.py \
-	--input data/processed/dataset.csv \
-	--output-dir data/processed/splits \
-	--seed 42
+python -m source.process_raw --help
+python -m source.split_dataset --help
+python -m source.train --help
+python -m source.evaluate --help
 ```
 
-O dataset processado contém atributos como tamanho, entropia, proporção de
-dígitos, quantidade de rótulos, maior rótulo e frequências de caracteres.
-`query_type` é convertido nos indicadores `is_A`, `is_AAAA`, `is_CNAME`,
-`is_TXT`, `is_NS`, `is_MX` e `is_PTR`. `family` também é expandida em
-`is_family_normal`, `is_family_base32`, `is_family_hex` e `is_family_base64`
-para análise do dataset. Os indicadores de `family` não entram no modelo, pois
-essa coluna descreve a forma sintética da anomalia e causaria vazamento do
-rótulo; os indicadores de tipo DNS são usados como entrada. A coluna `label` é
-usada apenas para avaliação; o autoencoder deve ser treinado somente com
-exemplos `normal`.
-
-Treinar o autoencoder híbrido principal:
+Para uma nova coleta limpa, remova somente os artefatos gerados do laboratório
+e recrie os serviços:
 
 ```bash
-python source/train.py \
-	--splits-dir data/processed/splits \
-	--output-dir results/autoencoder
+rm -f data/raw/query_labels.csv data/raw/dashboard/traffic_summary.json
+rm -f data/raw/dnsmasq/dnsmasq.log
+./scripts/docker-recreate.sh
 ```
 
-Ou, usando o script reprodutível:
-
-```bash
-./scripts/train-model.sh --epochs 200
-```
-
-Se `results/autoencoder/model.pt` já existir, o script o carrega
-automaticamente e continua o treinamento. O valor de `--epochs` representa
-épocas adicionais:
-
-```bash
-./scripts/train-model.sh --epochs 50
-```
-
-Para ignorar o modelo existente e começar do zero:
-
-```bash
-./scripts/train-model.sh --fresh --epochs 200
-```
-
-O treino combina a reconstrução textual e numérica, ajusta a padronização
-somente nos normais de treino e salva o modelo, o histórico e as métricas em
-`results/autoencoder/`.
-
-Depois do treinamento, gerar os gráficos:
-
-```bash
-./scripts/plot-training.sh
-```
-
-Durante o treino, cada época mostra no terminal as perdas, accuracy e limiar
-P99. O treinamento executa exatamente a quantidade definida em `--epochs`.
-O arquivo `losses.png` contém dois subplots:
-perdas e accuracy. São salvos `losses.png`, `metrics.png`,
-`confusion-matrices.png`, `score-distributions.png` e `thresholds.png` no diretório
-de resultados. Para abrir as janelas interativas, use
-`./scripts/plot-training.sh --show`.
-
-O plot também gera `test-samples.png`, com o domínio de entrada, a string
-reconstruída, a classificação e o erro por atributo numérico. A quantidade de
-amostras pode ser alterada com `--test-samples 10`.
-
-O `score-distributions.png` mostra a visão completa em escala logarítmica e
-um zoom linear dos scores baixos, com o limiar P99 marcado.
-
-Os scripts oficiais são `process-data.sh`, `train-model.sh` e
-`plot-training.sh`. O treinamento e a plotagem usam exclusivamente o modelo
-autoencoder.
-
-## Arquitetura principal
-
-A arquitetura principal combina tokens de caracteres com as 49 features numéricas.
-O ramo textual preserva as posições após as convoluções, e o decoder produz
-logits diretamente para as 64 posições do domínio, sem `mean pooling` nem
-interpolação. O modelo reconstrói o domínio e as features; o score é
-a soma dos erros textual e numérico normalizados pelos normais de validação.
-Dropout e `weight_decay` reduzem a memorização dos poucos domínios normais
-disponíveis. O valor padrão de `weight_decay` é `1e-4` e pode ser alterado com
-`--weight-decay`.
-
-Arquivos principais:
-
-```text
-data/processed/dataset.csv
-data/processed/splits/train.csv
-data/processed/splits/validation.csv
-data/processed/splits/test.csv
-data/processed/splits/summary.json
-```
-
-O dataset processado sintético é versionado. Logs, rótulos brutos e arquivos
-gerados em `data/raw/` permanecem ignorados pelo Git.
-
-O dataset atual contém muitos exemplos repetidos e apenas 88 domínios normais
-únicos no treino. Esse número deve ser aumentado antes de interpretar os
-resultados como generalização para domínios reais.
+Não remova dados versionados sem revisar o diff. O gerador continua limitado à
+rede Docker interna e ao domínio reservado `.test`.
 
 ## Estrutura
 
 ```text
 SixEyesDNS/
+├── data/
+│   ├── raw/
+│   └── processed/
 ├── docker/
 │   ├── dnsmasq/
-│   └── generator/
-├── data/
-│   └── processed/
+│   ├── generator/
+│   ├── dashboard/
+│   ├── nginx/
+│   └── service-api/
 ├── scripts/
 ├── source/
-│   ├── process_raw.py
-│   └── split_dataset.py
+├── results/
 ├── docker-compose.yml
 ├── environment.yml
 ├── requirements.txt
 └── roadmap.md
 ```
 
-Notebooks não fazem parte do fluxo principal. Jupyter pode ser usado
-opcionalmente no NPAD apenas para inspeção de resultados.
+## Segurança e ética
 
-## Segurança
+- gerar tráfego somente com scripts locais e sintéticos;
+- manter a rede Docker interna e sem encaminhamento para a Internet;
+- não implementar exfiltração real, persistência, evasão ou automação contra
+  terceiros;
+- não usar IP, cliente ou perfil de risco como feature;
+- não versionar credenciais, dados pessoais ou datasets externos;
+- documentar fontes externas realmente utilizadas;
+- registrar vazamentos entre conjuntos, falsos positivos, resultados ruins e
+  limitações.
 
-- gerar tráfego somente no ambiente local;
-- não encaminhar consultas para a Internet;
-- não capturar clientes de terceiros;
-- não usar IP, perfil de cliente ou metadados equivalentes como entrada do
-	modelo;
-- manter o tráfego anômalo sintético e documentado.
+## Referência da disciplina
+
+O trabalho deve conter introdução, técnicas utilizadas, resultados, análise
+crítica e conclusões. A apresentação presencial terá 10 minutos nas datas
+08, 10 ou 15/12/2026, conforme a escolha registrada na planilha da turma. O
+texto deve estar disponível no repositório até 15/12/2026.

@@ -1,285 +1,147 @@
 # Roadmap do SixEyesDNS
 
-## Estado atual
-
-A infraestrutura de coleta e preparação está funcionando:
-
-- ambiente Conda definido em `environment.yml`;
-- laboratório Docker com `dnsmasq` isolado em rede interna;
-- gerador de consultas normais e anômalas sintéticas;
-- 10.000 exemplos processados em `data/processed/dataset.csv`;
-- splits versionados em `data/processed/splits/`;
-- normalização da zona `.test` antes da extração de atributos;
-- scripts shell para executar Docker, recriar recursos e atualizar os dados.
-
-O próximo marco é implementar e avaliar o autoencoder em PyTorch.
-
-## Progresso atual
-
-Os itens abaixo foram implementados e validados manualmente. Essa marcação não
-substitui uma suíte de testes automatizados.
-
-### Validação manual concluída
-
-- [x] Ambiente Conda e dependências via pip configurados.
-- [x] Laboratório Docker com `dnsmasq` e rede interna funcionando.
-- [x] Geração sintética de domínios normais e suspeitos.
-- [x] Consultas DNS dos tipos `A`, `AAAA` e `CNAME`.
-- [x] Domínios variados, incluindo serviços, instituições e diferentes sufixos.
-- [x] Remoção da zona artificial `.test` antes das features.
-- [x] Extração de atributos numéricos dos domínios.
-- [x] Dataset processado com 10.000 exemplos.
-- [x] Separação sem sobreposição entre treino, validação e teste.
-- [x] Scripts shell para coleta e atualização dos dados.
-
-### Implementação e validação pendentes
-
-- [x] Implementar o autoencoder em PyTorch.
-- [x] Treinar somente com exemplos normais.
-- [x] Definir limiares de anomalia usando validação (percentil 99 e melhor F1).
-- [ ] Implementar os baselines de entropia e Isolation Forest.
-- [x] Calcular accuracy e scores combinados para a híbrida.
-- [ ] Avaliar generalização entre famílias de codificação.
-- [ ] Executar o treinamento no NPAD via Conda e shell.
-- [ ] Documentar limitações, falhas e falsos positivos.
-- [ ] Implementar demonstração local opcional com `dnsmasq`.
-
-## Objetivo
-
-Construir um sistema defensivo e educacional para detectar consultas DNS suspeitas usando um autoencoder treinado somente com consultas normais. A classificação será baseada no erro de reconstrução, com comparação contra métodos baseline.
-
-## Fase 1 — Ambiente e configuração
-
-Status: concluída.
-
-Estrutura atual:
-
-```text
-data/raw/
-data/processed/
-results/
-source/
-scripts/
-requirements.txt
-environment.yml
-```
-
-Implementar:
-
-- configuração por argumentos de linha de comando;
-- sementes fixas para `random`, NumPy e PyTorch;
-- registro das configurações e dos resultados dos experimentos;
-- ambiente Conda reproduzível para execução no supercomputador;
-- instruções completas de instalação e execução no `README.md`.
-
-**Validação:** executar um diagnóstico básico e registrar versões, dispositivo disponível e semente utilizada.
-
-## Fase 2 — Coleta, geração e preparação dos dados
-
-Status: concluída para o primeiro dataset.
-
-O gerador atual está em `docker/generator/gerador_queries.py` e produz:
-
-- domínios normais;
-- subdomínios com codificação base32;
-- codificação hexadecimal;
-- codificação base64;
-- variações de tamanho, entropia e ruído.
-
-Separar os dados em:
-
-- treino: somente domínios normais;
-- validação: domínios normais e anômalos;
-- teste: famílias e domínios não vistos durante o treinamento.
-
-**Regra crítica:** o mesmo domínio, payload ou família de exemplos não pode aparecer em mais de uma divisão.
-
-**Validação:** gerar um relatório com a quantidade de exemplos, famílias presentes e interseções entre treino, validação e teste.
-
-## Fase 3 — Engenharia de atributos
-
-Criar `source/features.py` com uma função única e reutilizável para extrair:
-
-- tamanho total do domínio;
-- entropia de Shannon dos caracteres;
-- proporção de dígitos;
-- número de rótulos;
-- tamanho do maior rótulo;
-- frequências de caracteres;
-- atributos derivados, se forem necessários.
-
-A normalização deve ser ajustada somente usando o conjunto de treino.
-
-Adicionar testes para:
-
-- domínios curtos;
-- domínios longos;
-- domínios com dígitos;
-- caracteres repetidos;
-- entradas inválidas ou vazias.
-
-**Validação:** confirmar que treino, avaliação e demonstração usam exatamente a mesma função de extração.
-
-## Fase 4 — Modelo principal
-
-O modelo principal está em `source/models.py`:
-
-- camada de entrada compatível com os atributos;
-- espaço latente reduzido;
-- reconstrução da entrada;
-- cálculo do erro MSE;
-- salvamento do modelo e dos parâmetros de normalização.
-
-O treinamento principal está em `source/train.py`:
-
-- treinar somente com dados normais;
-- registrar a perda de treino e validação;
-- definir o limiar usando o conjunto de validação;
-- salvar o modelo, o limiar e a configuração do experimento.
-
-**Validação:** verificar se o erro médio de reconstrução dos exemplos normais é menor que o erro dos exemplos anômalos.
-
-## Fase 5 — Baselines
-
-Criar `source/baselines.py` e comparar o autoencoder com:
-
-1. limiar simples baseado em entropia;
-2. Isolation Forest;
-3. autoencoder principal.
-
-Todos os métodos devem usar as mesmas divisões de dados e, quando aplicável, os mesmos atributos.
-
-**Validação:** gerar uma tabela comparativa com precisão, recall, F1, ROC-AUC e taxa de falsos positivos.
-
-## Fase 6 — Avaliação e generalização
-
-Criar `source/evaluate.py` para produzir:
-
-- matriz de confusão;
-- precisão;
-- recall;
-- F1;
-- ROC-AUC;
-- taxa de falsos positivos;
-- limiar utilizado;
-- distribuição dos erros de reconstrução.
-
-Executar o experimento de generalização:
-
-- treinar com uma codificação, por exemplo base32;
-- testar com outra, por exemplo hexadecimal;
-- comparar com o cenário em que todas as famílias aparecem no treinamento.
-
-**Validação:** registrar explicitamente falhas, falsos positivos e tipos de domínio que não foram detectados.
-
-## Fase 7 — Execução no supercomputador
-
-Adaptar o projeto para execução não interativa no NPAD:
-
-- criar `environment.yml` com as dependências gerais do projeto;
-- manter a instalação do PyTorch compatível com o hardware e os módulos
-  disponibilizados pelo supercomputador;
-- criar scripts em `scripts/` para preparar dados, treinar, avaliar e executar
-  experimentos;
-- aceitar caminhos, sementes, épocas, batch size e parâmetros por argumentos de
-  linha de comando ou arquivos em `configs/`;
-- salvar modelos, métricas, logs e configurações em `results/`;
-- criar um script de submissão `.sh` compatível com o agendador disponível no
-  NPAD;
-- registrar o commit, a configuração e a semente de cada execução.
-
-O fluxo principal deve usar arquivos Python:
-
-```bash
-conda env create -f environment.yml
-conda activate sixeyesdns
-python -m src.generate_data --config configs/data.json
-python -m src.train --config configs/train.json
-python -m src.evaluate --config configs/evaluate.json
-```
-
-O notebook deixa de ser requisito do projeto. Jupyter pode ser usado apenas
-como interface opcional para inspeção de resultados e gráficos, inclusive por
-meio de uma porta encaminhada no NPAD.
-
-**Validação:** executar um experimento completo via shell, sem abrir notebook,
-e confirmar que os artefatos foram salvos em `results/`.
-
-## Fase 8 — Demonstração local opcional
-
-Docker não deve ser uma dependência do treinamento nem da avaliação. Se for
-possível e útil no ambiente local, criar:
-
-```text
-docker/
-├── Dockerfile
-├── docker-compose.yml
-└── dnsmasq.conf
-```
-
-Implementar `source/demo.py` para uso local, quando houver acesso ao log do
-dnsmasq:
-
-- ler o log do dnsmasq;
-- extrair novos domínios;
-- calcular os atributos;
-- calcular a pontuação de anomalia;
-- classificar como `normal` ou `suspeita`;
-- exibir a pontuação e o horário da consulta.
-
-O tráfego anômalo deve ser sintético e gerado somente por scripts locais.
-
-**Validação:** executar a demonstração local sem alterar o pipeline principal.
-Se Docker não estiver disponível no NPAD, isso não deve impedir os experimentos.
-
-## Fase 9 — Relatório final
-
-Documentar:
-
-- objetivo e metodologia;
-- arquitetura do autoencoder;
-- origem e geração dos dados;
-- regras de separação dos conjuntos;
-- atributos utilizados;
-- escolha do limiar;
-- comparação com os baselines;
-- resultado do teste de generalização;
-- limitações e falsos positivos;
-- instruções completas para reproduzir os experimentos.
-
-Toda fonte, código ou dataset externo utilizado deve ser citado no `README.md`.
-
-## Ordem recomendada
-
-1. Criar a estrutura e as configurações.
-2. Implementar a geração dos dados.
-3. Implementar os atributos e os testes.
-4. Treinar o primeiro autoencoder.
-5. Adicionar avaliação e baselines.
-6. Executar o experimento de generalização.
-7. Validar a execução via Conda e shell no NPAD.
-8. Adicionar a demonstração local opcional.
-9. Consolidar os resultados no README e no relatório.
-
-## Primeiro marco
-
-O primeiro marco do projeto é:
-
-> Gerar um dataset sintético sem vazamento, extrair os atributos e treinar um autoencoder capaz de separar consultas normais de uma família anômala, com métricas reproduzíveis.
-
-Esse marco deve ser concluído antes da demonstração local opcional, pois estabelece a base experimental do projeto.
-
-## Critérios de conclusão
-
-- [x] Ambiente reproduzível e documentado, com validação manual.
-- [x] Dados sintéticos gerados localmente, com validação manual.
-- [x] Separação entre treino, validação e teste sem vazamento, verificada por script.
-- [x] Extração de atributos implementada e exercitada no processamento real.
-- [ ] Autoencoder treinado somente com dados normais.
-- [ ] Limiar definido usando validação.
-- [ ] Comparação com entropia e Isolation Forest.
-- [ ] Métricas e matriz de confusão salvas.
-- [ ] Generalização entre diferentes codificações avaliada.
-- [ ] Execução completa via Conda e shell funcionando no NPAD.
-- [ ] Demonstração local com `dnsmasq` documentada, caso seja viável.
-- [ ] Limitações e resultados negativos documentados.
+## Objetivo e prazo
+
+Concluir o projeto individual da Unidade III de **Aprendizado Profundo
+2026.2**, categoria **Autoencoders para Anomalias e Ruído**.
+
+- apresentação presencial: 08, 10 ou 15/12/2026;
+- texto no repositório: 15/12/2026;
+- demonstração offline ou local como entrega central da apresentação.
+
+O requisito acadêmico está em
+[doc/info/Descricao_do_Trabalho.md](doc/info/Descricao_do_Trabalho.md).
+
+## Diagnóstico concluído
+
+- [x] Confirmar que o repositório usa `source/`, não `src/`.
+- [x] Localizar o gerador em `docker/generator/gerador_queries.py`.
+- [x] Confirmar que o dataset versionado possui 50.000 registros.
+- [x] Confirmar 42 atributos lexicais e 58 colunas no schema atual.
+- [x] Confirmar que `.test` é removido da coluna de domínio processada.
+- [x] Confirmar ausência de interseção de domínios entre os splits atuais.
+- [x] Identificar somente 126 domínios normais únicos no gerador atual.
+- [x] Identificar log concatenado: 60.000 consultas para 50.000 rótulos.
+- [x] Identificar que o casamento atual usa domínio e tipo, sem timestamp.
+- [x] Planejar e implementar serviços fictícios, Nginx e dashboard local.
+- [x] Ampliar famílias sintéticas e perfis normais difíceis sem tráfego externo.
+- [ ] Confirmar funcionamento da porta `127.0.0.1:6767` com uma ferramenta DNS
+      disponível.
+
+## Fase 1 — Estrutura e schema
+
+Status: pendente.
+
+- [ ] Trabalhar na branch `ajustes-u3`.
+- [ ] Adicionar `source/__init__.py`.
+- [ ] Consolidar em `source/features.py` a normalização, tokenização, vocabulário
+      e os 42 atributos numéricos.
+- [ ] Separar explicitamente features e metadados.
+- [ ] Rejeitar automaticamente `label`, `family`, `query_type`, `seed`, IP e
+      cliente na matriz de entrada.
+- [ ] Fazer `process_raw.py` e `split_dataset.py` funcionarem com
+      `python -m source.<modulo>`.
+- [ ] Adicionar `--holdout-family`.
+- [ ] Expandir `summary.json` com linhas e domínios únicos por split, classe e
+      família.
+- [ ] Adicionar testes de determinismo, ausência de metadados e ausência de
+      interseção.
+- [ ] Mover `VL.py` para `scripts/check_env.py`.
+- [ ] Fixar dependências e incluir pytest, scikit-learn e matplotlib quando
+      realmente usados.
+
+## Fase 2 — Dados
+
+Status: diagnóstico concluído; implementação pendente.
+
+- [ ] Corrigir o alinhamento entre logs e rótulos e documentar o tratamento de
+      execuções concatenadas e duplicatas.
+- [ ] Alinhar README, compose e scripts quanto a `QUERY_COUNT`,
+      `ANOMALY_RATE` e `SEED`.
+- [ ] Decidir se o dataset versionado será regenerado; se sim, fazer isso em
+      commit separado.
+- [ ] Adicionar fonte opcional local `data/external/tranco_top.csv`, ignorada
+      pelo Git, com fallback interno.
+- [x] Adicionar normais difíceis com subdomínios semelhantes a hashes de CDN.
+- [x] Adicionar anomalias de baixa entropia, labels curtos e codificações mistas.
+- [x] Registrar sequência, timestamp UTC, serviço e perfil no arquivo de
+      rótulos para auditoria sem usá-los como features.
+- [x] Adicionar Nginx, API fictícia e dashboard local de coleta.
+- [ ] Garantir que o tráfego continue sintético, local e em `.test`.
+
+## Fase 3 — Modelos, treino e avaliação
+
+Status: implementação pendente; não há métricas finais.
+
+- [ ] Implementar `DenseAE` para 42 atributos e score MSE.
+- [ ] Implementar `CharAE` com tokens, convoluções e perda CE ignorando PAD.
+- [ ] Implementar `HybridAE` com score combinado CE/MSE.
+- [ ] Implementar `source/train.py` com seed 42, CPU, Adam, early stopping e
+      treino somente com normais.
+- [ ] Salvar artefatos completos: modelo, scaler, vocabulário, configuração,
+      limiares e curva de perda.
+- [ ] Implementar `source/scoring.py` com limiar P99 e melhor F1 calibrados
+      somente na validação.
+- [ ] Implementar baselines de entropia e Isolation Forest.
+- [ ] Implementar `source/evaluate.py` com métricas, figuras, prevalência,
+      recall a FPR de 1% e recall por família.
+- [ ] Avaliar leave-one-family-out sem escolher limiar no teste.
+- [ ] Adicionar explicabilidade por atributo e por caractere.
+- [ ] Testar shapes, parâmetros, treino de uma época e avaliação em dataset
+      mínimo.
+- [ ] Gerar tabela de ablação em `results/`.
+
+## Fase 4 — Demonstração
+
+Status: pendente; entrega central.
+
+- [ ] Criar `source/demo.py` usando a mesma normalização e features do treino.
+- [ ] Criar `scripts/demo.sh`.
+- [ ] Implementar modo ao vivo para log do dnsmasq quando a conectividade for
+      confirmada.
+- [ ] Implementar `--replay <log>` para apresentação sem Docker.
+- [ ] Exibir score, classificação e mapa de erro por caractere.
+- [ ] Documentar a alternativa dentro da rede Docker se a porta do host não
+      funcionar.
+- [x] Disponibilizar dashboard local em `http://127.0.0.1:8080`.
+
+## Fase 5 — Relatório e apresentação
+
+Status: diagnóstico documental concluído; consolidação pendente.
+
+- [ ] Organizar o README com Introdução, Desenvolvimento/Técnicas, Resultados,
+      Reprodução, Segurança/Ética e Referências.
+- [ ] Incluir somente números gerados e verificáveis; usar
+      `TODO(resultados)` enquanto faltarem.
+- [ ] Incluir pipeline e arquitetura híbrida em Mermaid.
+- [ ] Criar `docs/roteiro-apresentacao.md` para 10 minutos:
+      introdução 1,5; pipeline 2; modelos 2; resultados 3; demo 1,5.
+- [ ] Listar as figuras necessárias para a apresentação.
+- [ ] Atualizar referências apenas para fontes realmente utilizadas.
+- [ ] Sugerir, sem executar, os comandos `gh repo edit` e criação da tag
+      `entrega-u3` no dia da entrega.
+
+## Critérios de aceitação
+
+- [ ] `./scripts/process-data.sh` roda do zero e falha em caso de interseção.
+- [ ] `python -m source.train --model dense|char|hybrid` roda em CPU em poucos
+      minutos com o dataset versionado.
+- [ ] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
+      versionado.
+- [ ] `pytest` passa.
+- [ ] Nenhuma feature usa `label`, `family`, `query_type`, `seed`, IP ou
+      cliente.
+- [ ] O README não contém métricas inventadas.
+- [ ] O texto cobre introdução, técnicas, resultados, análise crítica e
+      conclusões.
+- [ ] A demo funciona ao vivo ou em replay offline.
+
+## Ordem de execução
+
+1. Corrigir estrutura e schema.
+2. Corrigir e documentar os dados.
+3. Implementar modelos, treino e avaliação.
+4. Implementar a demonstração offline/local.
+5. Executar testes e gerar resultados.
+6. Consolidar README, roteiro e figuras.
+7. Fazer revisão final antes da apresentação e do prazo do texto.

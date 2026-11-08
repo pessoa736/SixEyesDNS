@@ -68,6 +68,7 @@ def process(log_path: Path, labels_paths: list[Path], output_path: Path) -> int:
             {
                 "query_type": query["query_type"],
                 "family": label["family"],
+                "profile": label.get("profile", label["family"]),
                 "label": label["label"],
                 "seed": label["seed"],
             }
