@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from source import split_dataset
 from source.features import extract_features
+from source.split_dataset import assert_disjoint_splits
 
 FAMILIES = ("base32", "hex", "base64")
 
@@ -152,6 +154,59 @@ def test_summary_reports_domains_by_label_and_family(tmp_path: Path) -> None:
         assert info["rows"] == sum(v["rows"] for v in info["by_family"].values())
         for counts in info["by_family"].values():
             assert counts["domains"] <= counts["rows"]
+
+
+def make_rows(*domains: str) -> list[dict[str, str]]:
+    return [{"query": domain, "label": "normal"} for domain in domains]
+
+
+def test_assert_disjoint_splits_accepts_disjoint_splits() -> None:
+    splits = {
+        "train": make_rows("a.atlas", "b.atlas", "a.atlas"),
+        "validation": make_rows("c.atlas"),
+        "test": make_rows("d.atlas"),
+    }
+    assert_disjoint_splits(splits)
+
+
+def test_assert_disjoint_splits_lists_at_most_five_examples() -> None:
+    shared = [f"shared-{index}.atlas" for index in range(7)]
+    splits = {
+        "train": make_rows(*shared, "only-train.atlas"),
+        "validation": make_rows(*shared[:2]),
+        "test": make_rows(*shared[2:]),
+    }
+    with pytest.raises(ValueError, match="7 domínio") as error:
+        assert_disjoint_splits(splits)
+    message = str(error.value)
+    assert message.count("shared-") == 5
+    assert "em train/" in message
+    assert "only-train" not in message
+
+
+def test_main_rejects_overlapping_splits(tmp_path: Path, monkeypatch) -> None:
+    dataset = tmp_path / "dataset.csv"
+    build_dataset(dataset)
+
+    def leaky_split(groups, train_ratio, validation_ratio, randomizer):
+        rows = [row for group in groups for row in group]
+        return {"train": rows, "validation": rows[:1], "test": rows[:1]}
+
+    monkeypatch.setattr(split_dataset, "split_groups", leaky_split)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "split_dataset",
+            "--input",
+            str(dataset),
+            "--output-dir",
+            str(tmp_path / "splits"),
+        ],
+    )
+    with pytest.raises(ValueError, match="mais de um split"):
+        split_dataset.main()
+    assert not (tmp_path / "splits").exists()
 
 
 if __name__ == "__main__":

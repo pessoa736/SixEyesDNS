@@ -73,6 +73,28 @@ def write_split(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -
         writer.writerows(rows)
 
 
+def assert_disjoint_splits(splits: dict[str, list[dict[str, str]]]) -> None:
+    """Falha se algum domínio aparecer em mais de um split."""
+    split_names_by_domain: dict[str, set[str]] = defaultdict(set)
+    for split_name, rows in splits.items():
+        for row in rows:
+            split_names_by_domain[row["query"]].add(split_name)
+
+    overlaps = sorted(
+        (domain, sorted(names))
+        for domain, names in split_names_by_domain.items()
+        if len(names) > 1
+    )
+    if overlaps:
+        examples = ", ".join(
+            f"{domain!r} em {'/'.join(names)}" for domain, names in overlaps[:5]
+        )
+        raise ValueError(
+            f"{len(overlaps)} domínio(s) aparecem em mais de um split "
+            f"(vazamento entre treino, validação e teste); exemplos: {examples}"
+        )
+
+
 def split_summary(rows: list[dict[str, str]]) -> dict[str, object]:
     """Resume linhas e domínios únicos por split, classe e família."""
 
@@ -136,6 +158,7 @@ def main() -> None:
         "validation": normal_splits["validation"] + anomaly_splits["validation"],
         "test": normal_splits["test"] + anomaly_splits["test"] + holdout_rows,
     }
+    assert_disjoint_splits(splits)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     summary = {
