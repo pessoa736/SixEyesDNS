@@ -9,6 +9,5 @@ OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder-semantic}"
 
 exec "$PYTHON_BIN" -m source.train \
     --mode semantic \
-    --fresh \
     --output-dir "$OUTPUT_DIR" \
     "$@"

@@ -9,6 +9,5 @@ OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder-lexical}"
 
 exec "$PYTHON_BIN" -m source.train \
     --mode lexical \
-    --fresh \
     --output-dir "$OUTPUT_DIR" \
     "$@"

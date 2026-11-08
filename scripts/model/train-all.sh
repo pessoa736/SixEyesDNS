@@ -11,7 +11,6 @@ OUTPUT_DIR="${HYBRID_OUTPUT_DIR:-results/autoencoder-hybrid}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 exec "$PYTHON_BIN" -m source.train \
     --mode hybrid \
-    --fresh \
     --lexical-checkpoint results/autoencoder-lexical/model.pt \
     --output-dir "$OUTPUT_DIR" \
     "$@"

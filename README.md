@@ -246,6 +246,13 @@ uso:
   --lexical-checkpoint results/autoencoder-lexical/model.pt
 ```
 
+Os wrappers retomam um checkpoint existente por padrão. Para iniciar do zero,
+adicione `--fresh` ao comando desejado:
+
+```bash
+./scripts/model/train-lexical.sh --fresh
+```
+
 Para executar os três treinamentos em sequência:
 
 ```bash
@@ -258,6 +265,17 @@ Os gráficos do treinamento ficam em [`scripts/evaluate/`](scripts/evaluate/):
 RESULTS_DIR=results/autoencoder-lexical \
   ./scripts/evaluate/generate-plots.sh --test-samples 12
 ```
+
+### Testes
+
+```bash
+./scripts/test/run-tests.sh
+RESULTS_DIR=results/autoencoder-lexical ./scripts/test/test-model.sh
+RESULTS_DIR=results/autoencoder-lexical ./scripts/test/plot-model.sh
+```
+
+O teste visual seleciona igualmente exemplos normais e suspeitos; use um valor
+par em `SAMPLES` ou `TEST_SAMPLES`.
 
 Para recriar os containers:
 
