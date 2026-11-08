@@ -17,6 +17,7 @@ services:
     networks:
       unlimited-void-net:
         ipv4_address: 172.30.0.2
+      lab-edge: null
 
   bind9:
     build: ./docker/bind9
@@ -111,4 +112,8 @@ networks:
     ipam:
       config:
         - subnet: 172.30.0.0/24
+  # Rede de borda nao interna: no Docker Desktop, portas publicadas de
+  # containers presos somente a rede interna nao chegam ao host.
+  lab-edge:
+    driver: bridge
       

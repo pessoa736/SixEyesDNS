@@ -26,8 +26,10 @@ O requisito acadêmico está em
 - [x] Identificar que o casamento atual usa domínio e tipo, sem timestamp.
 - [x] Planejar e implementar serviços fictícios, Nginx e dashboard local.
 - [x] Ampliar famílias sintéticas e perfis normais difíceis sem tráfego externo.
-- [ ] Confirmar funcionamento da porta `127.0.0.1:6767` com uma ferramenta DNS
-      disponível.
+- [x] Confirmar funcionamento da porta `127.0.0.1:6767` com uma ferramenta DNS
+      disponível (consulta crua UDP/TCP; no Docker Desktop foi preciso ligar o
+      dnsmasq à rede de borda `lab-edge`, pois portas de containers presos só
+      à rede interna não chegam ao host).
 
 ## Fase 1 — Estrutura e schema
 

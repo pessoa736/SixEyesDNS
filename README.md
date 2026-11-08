@@ -321,10 +321,12 @@ Para recriar os containers:
 ./scripts/lab/docker-recreate.sh
 ```
 
-A publicação `127.0.0.1:6767:53` está configurada no compose, mas deve ser
-testada no ambiente antes de ser apresentada como funcional. Se a porta do
-host não funcionar, a demonstração deve gerar o tráfego dentro da rede
-interna ou usar o modo offline.
+A publicação `127.0.0.1:6767:53` foi confirmada neste ambiente com consultas
+UDP e TCP respondendo `172.30.0.11` para `web.atlas.test`. No Docker
+Desktop, containers presos somente a uma rede `internal: true` têm as portas
+publicadas descartadas silenciosamente; por isso o dnsmasq também é ligado à
+rede de borda `lab-edge`, que existe apenas para expor essa porta ao host.
+Todo o tráfego do laboratório continua na rede interna.
 
 Em ambientes Docker Desktop ou VS Code nos quais a porta publicada pelo
 daemon não aparece no host, use o servidor local do dashboard:
