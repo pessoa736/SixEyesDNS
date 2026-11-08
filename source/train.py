@@ -45,7 +45,20 @@ def parse_args() -> argparse.Namespace:
         default=1e-4,
         help="Regularização L2 para reduzir memorização dos domínios",
     )
-    parser.add_argument("--numeric-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--lambda",
+        dest="numeric_weight",
+        type=float,
+        default=1.0,
+        help="Peso do erro MSE numérico no score combinado",
+    )
+    parser.add_argument(
+        "--numeric-weight",
+        dest="numeric_weight",
+        type=float,
+        default=argparse.SUPPRESS,
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument(
         "--char-mask-prob",
         type=float,
@@ -112,7 +125,22 @@ def score_batch(
             reduction="none",
         ).mean(dim=1)
         numeric_error = ((reconstructed_numeric - numeric) ** 2).mean(dim=1)
-    return text_error.numpy(), numeric_error.numpy() * numeric_weight
+    return text_error.numpy(), numeric_error.numpy()
+
+
+def combine_scores(
+    text_error: np.ndarray,
+    numeric_error: np.ndarray,
+    text_mean: float,
+    text_std: float,
+    numeric_mean: float,
+    numeric_std: float,
+    numeric_weight: float,
+) -> np.ndarray:
+    """Combina CE lexical e MSE numérico em escalas comparáveis."""
+    return (text_error - text_mean) / text_std + numeric_weight * (
+        (numeric_error - numeric_mean) / numeric_std
+    )
 
 
 def main() -> None:
@@ -237,13 +265,26 @@ def main() -> None:
         numeric_mean = normal_numeric.mean()
         numeric_std = normal_numeric.std() + 1e-8
         validation_threshold = np.percentile(
-            (normal_text - text_mean) / text_std
-            + (normal_numeric - numeric_mean) / numeric_std,
+            combine_scores(
+                normal_text,
+                normal_numeric,
+                text_mean,
+                text_std,
+                numeric_mean,
+                numeric_std,
+                args.numeric_weight,
+            ),
             99,
         )
-        validation_score = (all_text - text_mean) / text_std + (
-            all_numeric - numeric_mean
-        ) / numeric_std
+        validation_score = combine_scores(
+            all_text,
+            all_numeric,
+            text_mean,
+            text_std,
+            numeric_mean,
+            numeric_std,
+            args.numeric_weight,
+        )
         validation_labels = np.asarray(
             [row["label"] != "normal" for row in validation], dtype=int
         )
@@ -253,6 +294,9 @@ def main() -> None:
                 "epoch": epoch,
                 "train_loss": float(np.mean(losses)),
                 "validation_loss": validation_loss,
+                "validation_char_error": float(normal_text.mean()),
+                "validation_numeric_error": float(normal_numeric.mean()),
+                "lambda": args.numeric_weight,
                 "validation_accuracy": float(
                     np.mean((validation_score > validation_threshold) == validation_labels)
                 ),
@@ -287,15 +331,34 @@ def main() -> None:
     )
     text_mean, text_std = validation_text_normal.mean(), validation_text_normal.std() + 1e-8
     numeric_mean, numeric_std = validation_numeric_normal.mean(), validation_numeric_normal.std() + 1e-8
-    validation_score = (validation_text - text_mean) / text_std + (
-        validation_numeric_scores - numeric_mean
-    ) / numeric_std
-    test_score = (test_text - text_mean) / text_std + (
-        test_numeric_scores - numeric_mean
-    ) / numeric_std
+    validation_score = combine_scores(
+        validation_text,
+        validation_numeric_scores,
+        text_mean,
+        text_std,
+        numeric_mean,
+        numeric_std,
+        args.numeric_weight,
+    )
+    test_score = combine_scores(
+        test_text,
+        test_numeric_scores,
+        text_mean,
+        text_std,
+        numeric_mean,
+        numeric_std,
+        args.numeric_weight,
+    )
     threshold = float(np.percentile(
-        (validation_text_normal - text_mean) / text_std
-        + (validation_numeric_normal - numeric_mean) / numeric_std,
+        combine_scores(
+            validation_text_normal,
+            validation_numeric_normal,
+            text_mean,
+            text_std,
+            numeric_mean,
+            numeric_std,
+            args.numeric_weight,
+        ),
         99,
     ))
     metrics = {
@@ -310,6 +373,11 @@ def main() -> None:
         "test_scores": test_score.tolist(),
         "text_weight": 1.0,
         "numeric_weight": args.numeric_weight,
+        "score_formula": "z(char_cross_entropy) + lambda * z(numeric_mse)",
+        "validation_normal_char_mean": float(text_mean),
+        "validation_normal_char_std": float(text_std),
+        "validation_normal_numeric_mean": float(numeric_mean),
+        "validation_normal_numeric_std": float(numeric_std),
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -331,6 +399,8 @@ def main() -> None:
             "numeric_dim": len(FEATURE_COLUMNS),
             "architecture": "positional-conv-v2",
             "weight_decay": args.weight_decay,
+            "numeric_weight": args.numeric_weight,
+            "score_formula": "z(char_cross_entropy) + lambda * z(numeric_mse)",
         },
         checkpoint_path,
     )

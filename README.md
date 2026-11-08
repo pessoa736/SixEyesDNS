@@ -138,7 +138,15 @@ Serão comparados:
 O treinamento deve usar seed 42, CPU como caminho suportado, early stopping e
 somente exemplos normais. Os limiares serão calculados na validação, incluindo
 percentil 99 dos normais e melhor F1 supervisionado, sem escolher limiar no
-teste.
+teste. O score híbrido usado no treinamento é:
+
+```text
+score = z(entropia_cruzada_dos_caracteres)
+      + lambda * z(MSE_dos_atributos)
+```
+
+`lambda` pode ser alterado pela CLI, por exemplo `--lambda 0.7`. Os termos são
+padronizados usando somente os normais da validação antes da combinação.
 
 ### Avaliação
 

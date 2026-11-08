@@ -80,6 +80,8 @@ Status: implementação pendente; não há métricas finais.
 - [ ] Implementar `HybridAE` com score combinado CE/MSE.
 - [ ] Implementar `source/train.py` com seed 42, CPU, Adam, early stopping e
       treino somente com normais.
+- [x] Combinar no treinamento o erro lexical CE e o MSE numérico por
+      `z(CE) + lambda*z(MSE)`, com `lambda` configurável.
 - [ ] Salvar artefatos completos: modelo, scaler, vocabulário, configuração,
       limiares e curva de perda.
 - [ ] Implementar `source/scoring.py` com limiar P99 e melhor F1 calibrados
