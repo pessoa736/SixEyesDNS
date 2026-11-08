@@ -26,22 +26,22 @@ do objetivo do modelo.
 
 - O processamento está em `source/`, e o gerador está em
   `docker/generator/gerador_queries.py`.
-- O dataset versionado possui 50.000 registros e 58 colunas.
+- O dataset versionado possui 10.000 registros e 59 colunas.
 - A parte lexical contém 42 atributos: 6 escalares e 36 frequências de
   caracteres `a-z` e `0-9`.
 - O schema atual também contém indicadores de `query_type` e `family`, além
   dos metadados `query`, `query_type`, `family`, `label` e `seed`.
 - Os domínios processados não mantêm o sufixo artificial `.test`.
-- O gerador atual produz somente 126 domínios normais únicos para 50.000
-  consultas, causando muitas repetições. A nova geração amplia combinações
-  determinísticas de serviços, regiões, ambientes e plataformas, incluindo
-  casos difíceis com subdomínios semelhantes a identificadores de CDN.
+- A nova geração amplia combinações determinísticas de serviços, regiões,
+  ambientes e plataformas, incluindo casos difíceis com subdomínios
+  semelhantes a identificadores de CDN.
 - Os splits atuais não compartilham domínios entre si, mas repetem registros
   dentro dos próprios conjuntos. O `summary.json` ainda precisa ser ampliado
   para detalhar domínios únicos por classe e família.
-- O log versionado contém consultas de execuções concatenadas: há 60.000
-  consultas reconhecidas para 50.000 rótulos. Portanto, o alinhamento deve ser
-  verificado antes de regenerar o dataset.
+- A coleta atual possui 10.000 consultas no log e 10.000 rótulos, com
+  alinhamento sequencial completo. Coletas antigas tinham execuções
+  concatenadas; por isso, o alinhamento deve continuar sendo verificado antes
+  de novas regenerações.
 
 Essas observações são diagnóstico, não resultados de desempenho. Não há ainda
 uma tabela final de métricas válida para o relatório.
@@ -51,7 +51,7 @@ uma tabela final de métricas válida para o relatório.
 ### Laboratório e dados
 
 O laboratório usa Docker com `dnsmasq` em uma rede interna. O compose define
-`QUERY_COUNT=50000`, `ANOMALY_RATE=0.5` e `SEED=42`. O tráfego deve permanecer
+`QUERY_COUNT=10000`, `ANOMALY_RATE=0.5` e `SEED=42`. O tráfego deve permanecer
 local, usando a zona reservada `.test`; o dnsmasq não possui servidores
 upstream configurados.
 

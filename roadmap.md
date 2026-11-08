@@ -17,6 +17,7 @@ O requisito acadêmico está em
 - [x] Confirmar que o repositório usa `source/`, não `src/`.
 - [x] Localizar o gerador em `docker/generator/gerador_queries.py`.
 - [x] Confirmar que o dataset versionado possui 50.000 registros.
+- [x] Regenerar o dataset limpo com 10.000 consultas do laboratório ampliado.
 - [x] Confirmar 42 atributos lexicais e 58 colunas no schema atual.
 - [x] Confirmar que `.test` é removido da coluna de domínio processada.
 - [x] Confirmar ausência de interseção de domínios entre os splits atuais.
