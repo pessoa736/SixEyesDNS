@@ -18,18 +18,32 @@ services:
       unlimited-void-net:
         ipv4_address: 172.30.0.2
 
-  service-api:
+  fake-services:
     build: ./docker/service-api
     environment:
-      SERVICE_NAME: catalog-api
+      TRAFFIC_PATH: /data/dashboard/backend_traffic.json
+    volumes:
+      - ./data/raw:/data
     networks:
       unlimited-void-net:
         ipv4_address: 172.30.0.11
 
+  backend-client:
+    build: ./docker/backend-client
+    depends_on:
+      - fake-services
+    environment:
+      SERVICE_HOST: fake-services
+      SERVICE_PORT: "8081"
+      REQUEST_INTERVAL: "0.5"
+      TRAFFIC_SEED: "42"
+    networks:
+      unlimited-void-net: null
+
   nginx:
     image: nginx:1.27.2-alpine
     depends_on:
-      - service-api
+      - fake-services
     ports:
       - "8080:80"
     volumes:

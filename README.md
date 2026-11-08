@@ -72,11 +72,14 @@ payloads de baixa entropia e codificações mistas. O arquivo de rótulos regist
 sequência, timestamp UTC, serviço e perfil gerador para auditoria do
 laboratório; esses campos são metadados e não entram no modelo.
 
-O laboratório também sobe um Nginx em `127.0.0.1:8080`, uma API fictícia
-`service-api` e um dashboard local. O dashboard exibe contagens de consultas,
-rótulos, famílias e domínios únicos a partir de
-`data/raw/dashboard/traffic_summary.json`. A API é acessível pelo Nginx em
-`/api/health` e `/api/catalog`.
+O laboratório também sobe um Nginx em `127.0.0.1:8080`, serviços fictícios,
+aplicações backend sintéticas e um dashboard local. As aplicações
+`web-frontend`, `event-worker` e `monitor-agent` fazem requisições internas
+para os serviços de catálogo, autenticação, eventos, busca e métricas. O
+dashboard mostra consultas DNS e requisições backend por aplicação, serviço,
+rota, status e latência. Os dados ficam em
+`data/raw/dashboard/traffic_summary.json` e
+`data/raw/dashboard/backend_traffic.json`.
 
 ### Processamento e atributos
 
@@ -156,6 +159,12 @@ docker compose wait generator
 Durante a coleta, abra <http://127.0.0.1:8080> para acompanhar o tráfego
 sintético. O dashboard não envia dados para a Internet e não substitui as
 métricas do modelo.
+
+Para observar as aplicações falsas:
+
+```bash
+docker compose logs -f backend-client fake-services
+```
 
 Para recriar os containers:
 

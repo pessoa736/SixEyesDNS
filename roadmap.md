@@ -67,6 +67,7 @@ Status: diagnóstico concluído; implementação pendente.
 - [x] Registrar sequência, timestamp UTC, serviço e perfil no arquivo de
       rótulos para auditoria sem usá-los como features.
 - [x] Adicionar Nginx, API fictícia e dashboard local de coleta.
+- [x] Adicionar aplicações backend sintéticas e telemetria de requisições.
 - [ ] Garantir que o tráfego continue sintético, local e em `.test`.
 
 ## Fase 3 — Modelos, treino e avaliação
@@ -104,6 +105,7 @@ Status: pendente; entrega central.
 - [ ] Documentar a alternativa dentro da rede Docker se a porta do host não
       funcionar.
 - [x] Disponibilizar dashboard local em `http://127.0.0.1:8080`.
+- [x] Monitorar aplicações, serviços, rotas, erros e latência no dashboard.
 
 ## Fase 5 — Relatório e apresentação
 

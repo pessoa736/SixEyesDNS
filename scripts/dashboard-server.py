@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 class DashboardHandler(BaseHTTPRequestHandler):
     dashboard_dir: Path
     summary_path: Path
+    backend_traffic_path: Path
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
@@ -20,6 +21,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_file(self.dashboard_dir / "index.html", "text/html")
         elif path == "/traffic_summary.json":
             self._send_summary()
+        elif path == "/backend_traffic.json":
+            self._send_json_file(self.backend_traffic_path)
         elif path == "/api/health":
             self._send_json({"status": "ok", "service": "local-dashboard"})
         else:
@@ -53,6 +56,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         self._send_json(payload)
 
+    def _send_json_file(self, path: Path) -> None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            payload = {
+                "total_requests": 0,
+                "applications": {},
+                "services": {},
+                "errors": 0,
+                "updated_at": "aguardando aplicações",
+            }
+        except json.JSONDecodeError:
+            self.send_error(503, "Tráfego backend temporariamente indisponível")
+            return
+        self._send_json(payload)
+
     def _send_json(self, payload: dict[str, object]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
@@ -76,11 +95,17 @@ def main() -> None:
         type=Path,
         default=Path("data/raw/dashboard/traffic_summary.json"),
     )
+    parser.add_argument(
+        "--backend-traffic",
+        type=Path,
+        default=Path("data/raw/dashboard/backend_traffic.json"),
+    )
     args = parser.parse_args()
 
     handler = DashboardHandler
     handler.dashboard_dir = args.dashboard_dir
     handler.summary_path = args.summary
+    handler.backend_traffic_path = args.backend_traffic
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print(f"Dashboard disponível em http://{args.host}:{args.port}", flush=True)
     try:
