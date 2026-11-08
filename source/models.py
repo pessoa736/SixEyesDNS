@@ -6,6 +6,51 @@ import torch
 from torch import nn
 
 
+class CharAutoencoder(nn.Module):
+    """Autoencoder lexical independente para pré-treinar o ramo textual."""
+
+    def __init__(
+        self,
+        vocabulary_size: int = 41,
+        max_length: int = 64,
+        latent_dim: int = 16,
+        padding_index: int = 0,
+    ) -> None:
+        super().__init__()
+        self.embedding = nn.Embedding(vocabulary_size, 16, padding_idx=padding_index)
+        self.char_encoder = nn.Sequential(
+            nn.Conv1d(16, 64, 3, padding=1), nn.ReLU(), nn.Dropout(0.10),
+            nn.Conv1d(64, 64, 3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(), nn.Dropout(0.10),
+            nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(),
+        )
+        self.latent = nn.Sequential(
+            nn.Linear(64 * (max_length // 2), latent_dim),
+            nn.Tanh(),
+            nn.Dropout(0.10),
+        )
+        self.char_decoder = nn.Sequential(
+            nn.Linear(latent_dim, 64 * 32), nn.ReLU(), nn.Dropout(0.10),
+            nn.Unflatten(1, (32, 64)),
+            nn.Conv1d(32, 64, 3, padding=1), nn.ReLU(),
+            nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(), nn.Dropout(0.10),
+            nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(),
+            nn.Conv1d(64, vocabulary_size, 3, padding=1),
+        )
+
+    def forward(
+        self,
+        characters: torch.Tensor,
+        numeric: torch.Tensor | None = None,
+        mode: str = "lexical",
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        encoded = self.char_encoder(
+            self.embedding(characters).transpose(1, 2)
+        ).flatten(start_dim=1)
+        logits = self.char_decoder(self.latent(encoded))
+        return logits, torch.empty((characters.shape[0], 0), device=characters.device)
+
+
 class HybridAutoencoder(nn.Module):
     """Combina sequência de caracteres com os atributos lexicais numéricos."""
 

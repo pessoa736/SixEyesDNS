@@ -17,10 +17,10 @@ from torch.utils.data import DataLoader, TensorDataset
 
 if __package__:
     from .features import FEATURE_COLUMNS, normalize_domain, transform_features
-    from .models import HybridAutoencoder
+    from .models import CharAutoencoder, HybridAutoencoder
 else:
     from features import FEATURE_COLUMNS, normalize_domain, transform_features
-    from models import HybridAutoencoder
+    from models import CharAutoencoder, HybridAutoencoder
 
 
 CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789-_.")
@@ -43,6 +43,11 @@ def parse_args() -> argparse.Namespace:
         choices=("lexical", "semantic", "hybrid"),
         default="hybrid",
         help="Ramo treinado: caracteres, atributos numéricos ou ambos",
+    )
+    parser.add_argument(
+        "--lexical-checkpoint",
+        type=Path,
+        help="Checkpoint lexical para inicializar embedding e encoder no híbrido",
     )
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument(
@@ -123,7 +128,7 @@ def numeric_tensor(rows: list[dict[str, str]], scaler: StandardScaler) -> torch.
 
 
 def score_batch(
-    model: HybridAutoencoder,
+    model: nn.Module,
     characters: torch.Tensor,
     numeric: torch.Tensor,
     mode: str,
@@ -141,8 +146,11 @@ def score_batch(
             token_loss.masked_fill(characters == TOKEN_TO_INDEX[PAD], 0.0).sum(dim=1)
             / valid_tokens
         )
-        numeric_error = ((reconstructed_numeric - numeric) ** 2).mean(dim=1)
-    return text_error.numpy(), numeric_error.numpy()
+        if reconstructed_numeric.shape[1] == 0:
+            numeric_error = np.zeros(characters.shape[0], dtype=np.float32)
+        else:
+            numeric_error = ((reconstructed_numeric - numeric) ** 2).mean(dim=1).numpy()
+    return text_error.numpy(), numeric_error
 
 
 def combine_scores(
@@ -225,9 +233,24 @@ def main() -> None:
     validation_characters = encode_domains(validation)
     test_numeric = numeric_tensor(test, scaler)
     test_characters = encode_domains(test)
-    model = HybridAutoencoder(
-        len(FEATURE_COLUMNS), len(VOCABULARY), MAX_LENGTH, args.latent_dim
-    )
+    if args.mode == "lexical":
+        model: nn.Module = CharAutoencoder(
+            len(VOCABULARY), MAX_LENGTH, args.latent_dim
+        )
+    else:
+        model = HybridAutoencoder(
+            len(FEATURE_COLUMNS), len(VOCABULARY), MAX_LENGTH, args.latent_dim
+        )
+        if args.lexical_checkpoint:
+            lexical_checkpoint = torch.load(
+                args.lexical_checkpoint, map_location="cpu"
+            )
+            lexical_state = {
+                key: value
+                for key, value in lexical_checkpoint["model_state"].items()
+                if key.startswith(("embedding.", "char_encoder."))
+            }
+            model.load_state_dict(lexical_state, strict=False)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
@@ -239,7 +262,12 @@ def main() -> None:
     best_optimizer_state = None
     if checkpoint_path.is_file() and not args.fresh:
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        if checkpoint.get("architecture") != "positional-conv-v2":
+        expected_architecture = (
+            "char-autoencoder-v1"
+            if args.mode == "lexical"
+            else "positional-conv-v2"
+        )
+        if checkpoint.get("architecture") != expected_architecture:
             raise ValueError(
                 "O checkpoint usa a arquitetura antiga; execute com --fresh "
                 "para treinar a arquitetura posicional atualizada."
@@ -296,7 +324,11 @@ def main() -> None:
             lexical_loss = character_loss(
                 logits, characters, args.pad_loss_weight
             )
-            semantic_loss = numeric_loss(reconstructed, numeric)
+            semantic_loss = (
+                numeric_loss(reconstructed, numeric)
+                if args.mode != "lexical"
+                else torch.zeros((), device=characters.device)
+            )
             if args.mode == "lexical":
                 loss = lexical_loss
             elif args.mode == "semantic":
@@ -319,8 +351,10 @@ def main() -> None:
                 validation_normal_characters,
                 args.pad_loss_weight,
             )
-            validation_semantic_loss = numeric_loss(
-                validation_reconstructed, validation_normal_numeric
+            validation_semantic_loss = (
+                numeric_loss(validation_reconstructed, validation_normal_numeric)
+                if args.mode != "lexical"
+                else torch.zeros((), device=validation_normal_characters.device)
             )
             validation_loss = float(
                 validation_lexical_loss
@@ -489,7 +523,11 @@ def main() -> None:
             "numeric_std": float(numeric_std),
             "feature_columns": list(FEATURE_COLUMNS),
             "numeric_dim": len(FEATURE_COLUMNS),
-            "architecture": "positional-conv-v2",
+            "architecture": (
+                "char-autoencoder-v1"
+                if args.mode == "lexical"
+                else "positional-conv-v2"
+            ),
             "weight_decay": args.weight_decay,
             "pad_loss_weight": args.pad_loss_weight,
             "numeric_weight": args.numeric_weight,

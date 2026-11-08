@@ -13,11 +13,11 @@ from sklearn.preprocessing import StandardScaler
 
 if __package__:
     from .features import FEATURE_COLUMNS, normalize_domain, transform_features
-    from .models import HybridAutoencoder
+    from .models import CharAutoencoder, HybridAutoencoder
     from .train import MAX_LENGTH, TOKEN_TO_INDEX, VOCABULARY, encode_domains
 else:
     from features import FEATURE_COLUMNS, normalize_domain, transform_features
-    from models import HybridAutoencoder
+    from models import CharAutoencoder, HybridAutoencoder
     from train import MAX_LENGTH, TOKEN_TO_INDEX, VOCABULARY, encode_domains
 
 
@@ -82,11 +82,20 @@ def generate_test_plot(
     scaler.n_features_in_ = len(FEATURE_COLUMNS)
     numeric = scaler.transform(transform_features(rows)).astype(np.float32)
     characters = encode_domains(rows)
-    model = HybridAutoencoder(
-        len(FEATURE_COLUMNS),
-        len(VOCABULARY),
-        int(checkpoint["max_length"]),
-        int(checkpoint["latent_dim"]),
+    model_class = (
+        CharAutoencoder
+        if checkpoint.get("architecture") == "char-autoencoder-v1"
+        else HybridAutoencoder
+    )
+    model = (
+        model_class(len(VOCABULARY), int(checkpoint["max_length"]), int(checkpoint["latent_dim"]))
+        if model_class is CharAutoencoder
+        else model_class(
+            len(FEATURE_COLUMNS),
+            len(VOCABULARY),
+            int(checkpoint["max_length"]),
+            int(checkpoint["latent_dim"]),
+        )
     )
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
@@ -107,7 +116,10 @@ def generate_test_plot(
         token_error.masked_fill(characters == TOKEN_TO_INDEX["<PAD>"], 0.0).sum(dim=1)
         / valid_tokens
     ).numpy()
-    numeric_error = ((reconstructed_numeric.numpy() - numeric) ** 2).mean(axis=1)
+    if reconstructed_numeric.shape[1] == 0:
+        numeric_error = np.zeros(len(rows), dtype=np.float32)
+    else:
+        numeric_error = ((reconstructed_numeric.numpy() - numeric) ** 2).mean(axis=1)
     metrics_path = results_dir / "metrics.json"
     metrics = {}
     if metrics_path.is_file():

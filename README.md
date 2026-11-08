@@ -161,6 +161,27 @@ python -m source.train --mode semantic --fresh
 python -m source.train --mode hybrid --fresh
 ```
 
+O modo `lexical` cria um submodelo textual independente
+(`char-autoencoder-v1`). Esse checkpoint pode ser usado para inicializar o
+embedding e o encoder de caracteres do modelo híbrido:
+
+```bash
+python -m source.train \
+  --mode lexical \
+  --fresh \
+  --output-dir results/autoencoder-lexical
+
+python -m source.train \
+  --mode hybrid \
+  --fresh \
+  --lexical-checkpoint results/autoencoder-lexical/model.pt \
+  --output-dir results/autoencoder-hybrid
+```
+
+Assim, o submodelo lexical aprende primeiro a reconstruir o texto e depois
+seu encoder é reutilizado junto ao encoder numérico. O decoder lexical e o
+latente híbrido continuam sendo ajustados no segundo treinamento.
+
 O modo semântico usa os atributos agregados do domínio (entropia, proporções,
 tamanhos e frequências), enquanto o modo lexical usa a sequência de caracteres.
 Em todos os modos, o treino continua usando apenas exemplos normais.
