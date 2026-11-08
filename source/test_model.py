@@ -179,12 +179,23 @@ def generate_test_plot(
             fontsize=10,
             weight="bold",
         )
-        error = np.abs(reconstructed_numeric[index].numpy() - numeric[index])
+        if mode == "lexical":
+            error = token_error[index].numpy()
+            error_title = "Erro lexical por posição"
+            error_labels = np.arange(len(error))
+        else:
+            error = np.abs(reconstructed_numeric[index].numpy() - numeric[index])
+            error_title = "Erro por atributo numérico"
+            error_labels = np.arange(len(FEATURE_COLUMNS))
         image = axes[index, 1].imshow(error[np.newaxis, :], aspect="auto", cmap="Reds")
-        axes[index, 1].set_title("Erro por atributo numérico", fontsize=10)
+        axes[index, 1].set_title(error_title, fontsize=10)
         axes[index, 1].set_yticks([])
-        axes[index, 1].set_xticks(np.arange(len(FEATURE_COLUMNS)))
-        axes[index, 1].set_xticklabels(FEATURE_COLUMNS, rotation=90, fontsize=6)
+        axes[index, 1].set_xticks(error_labels)
+        axes[index, 1].set_xticklabels(
+            FEATURE_COLUMNS if mode != "lexical" else error_labels,
+            rotation=90,
+            fontsize=6,
+        )
         figure.colorbar(image, ax=axes[index, 1], fraction=0.02, pad=0.02)
     figure.suptitle("Teste: entrada, reconstrução textual e erro numérico")
     figure.tight_layout()
