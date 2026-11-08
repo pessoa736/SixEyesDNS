@@ -242,9 +242,11 @@ uso:
 ```bash
 ./scripts/model/train-lexical.sh
 ./scripts/model/train-semantic.sh
-./scripts/model/train-hybrid.sh \
-  --lexical-checkpoint results/autoencoder-lexical/model.pt
+./scripts/model/train-hybrid.sh
 ```
+
+O treino híbrido usa automaticamente
+`results/autoencoder-lexical/model.pt` quando esse arquivo existir.
 
 Os wrappers retomam um checkpoint existente por padrão. Para iniciar do zero,
 adicione `--fresh` ao comando desejado:

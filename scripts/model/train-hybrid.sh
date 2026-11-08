@@ -9,6 +9,7 @@ SPLITS_DIR="${SPLITS_DIR:-data/processed/splits}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 PLOT_AFTER_TRAINING="${PLOT_AFTER_TRAINING:-1}"
+LEXICAL_CHECKPOINT="${LEXICAL_CHECKPOINT:-results/autoencoder-lexical/model.pt}"
 if [[ "$PYTHON_BIN" == "python" && -x "$ROOT_DIR/.venv-amd/bin/python" ]]; then
     PYTHON_BIN="$ROOT_DIR/.venv-amd/bin/python"
 fi
@@ -25,11 +26,16 @@ echo "Iniciando treinamento do autoencoder."
 echo "Splits: $SPLITS_DIR"
 echo "Saída: $OUTPUT_DIR"
 
-"$PYTHON_BIN" -m source.train \
-    --mode hybrid \
-    --splits-dir "$SPLITS_DIR" \
-    --output-dir "$OUTPUT_DIR" \
-    "$@"
+TRAIN_ARGS=(
+    --mode hybrid
+    --splits-dir "$SPLITS_DIR"
+    --output-dir "$OUTPUT_DIR"
+)
+if [[ -f "$LEXICAL_CHECKPOINT" ]]; then
+    TRAIN_ARGS+=(--lexical-checkpoint "$LEXICAL_CHECKPOINT")
+fi
+
+"$PYTHON_BIN" -m source.train "${TRAIN_ARGS[@]}" "$@"
 
 if [[ "$PLOT_AFTER_TRAINING" == "1" ]]; then
     "$PYTHON_BIN" -m source.plot_training \
