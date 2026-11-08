@@ -135,8 +135,8 @@ Serão comparados:
 4. limiar simples de entropia;
 5. Isolation Forest sobre os mesmos 42 atributos.
 
-O treinamento deve usar seed 42, CPU como caminho suportado, early stopping e
-somente exemplos normais. Os limiares serão calculados na validação, incluindo
+O treinamento deve usar seed 42, CPU como caminho suportado, early stopping
+com paciência fixa de 200 épocas e somente exemplos normais. Os limiares serão calculados na validação, incluindo
 percentil 99 dos normais e melhor F1 supervisionado, sem escolher limiar no
 teste. O score híbrido usado no treinamento é:
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 
@@ -111,13 +112,21 @@ def plot_metrics(metrics: dict[str, object], output_dir: Path) -> None:
 
 
 def plot_confusion_matrices(metrics: dict[str, object], output_dir: Path) -> None:
-    if "validation_percentile_99" not in metrics:
+    if "validation_percentile_99" in metrics:
+        matrices = [
+            ("Teste - percentil 99", metrics["test_percentile_99"]["confusion_matrix"]),
+            ("Teste - melhor F1", metrics["test_best_f1"]["confusion_matrix"]),
+        ]
+    elif "test_confusion_matrix" in metrics:
+        matrices = [
+            ("Validação - P99", metrics["validation_confusion_matrix"]),
+            ("Teste - P99", metrics["test_confusion_matrix"]),
+        ]
+    else:
         return
-    names = ("test_percentile_99", "test_best_f1")
-    titles = ("Teste - percentil 99", "Teste - melhor F1")
     figure, axes = plt.subplots(1, 2, figsize=(9, 4))
-    for axis, name, title in zip(axes, names, titles):
-        matrix = np.asarray(metrics[name]["confusion_matrix"])
+    for axis, (title, values) in zip(axes, matrices):
+        matrix = np.asarray(values)
         image = axis.imshow(matrix, cmap="Blues")
         for row in range(matrix.shape[0]):
             for column in range(matrix.shape[1]):
@@ -132,20 +141,53 @@ def plot_confusion_matrices(metrics: dict[str, object], output_dir: Path) -> Non
     figure.savefig(output_dir / "confusion-matrices.png", dpi=150)
 
 
-def plot_score_distributions(metrics: dict[str, object], output_dir: Path) -> None:
+def read_split_labels(splits_dir: Path, split: str, expected: int) -> np.ndarray | None:
+    """Lê os rótulos de um split na mesma ordem dos scores salvos."""
+    path = splits_dir / f"{split}.csv"
+    if not path.is_file():
+        return None
+    with path.open(newline="", encoding="utf-8") as file:
+        labels = np.asarray(
+            [row.get("label") != "normal" for row in csv.DictReader(file)],
+            dtype=bool,
+        )
+    return labels if len(labels) == expected else None
+
+
+def plot_score_distributions(
+    metrics: dict[str, object], output_dir: Path, splits_dir: Path
+) -> None:
     if "score_distributions" not in metrics:
-        figure, axis = plt.subplots(figsize=(9, 5))
-        validation = np.asarray(metrics["validation_scores"])
-        test = np.asarray(metrics["test_scores"])
         threshold = float(metrics["threshold"])
-        axis.hist(validation, bins=35, alpha=0.6, label="validação")
-        axis.hist(test, bins=35, alpha=0.6, label="teste")
-        axis.axvline(threshold, color="black", linestyle="--", label=f"P99={threshold:.3f}")
-        axis.set_title("Scores combinados do modelo")
-        axis.set_xlabel("Score normalizado (texto + numérico)")
-        axis.set_ylabel("Quantidade")
-        axis.grid(alpha=0.2)
-        axis.legend()
+        figure, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
+        for axis, split, title in (
+            (axes[0], "validation", "Validação"),
+            (axes[1], "test", "Teste"),
+        ):
+            scores = np.asarray(metrics[f"{split}_scores"], dtype=float)
+            labels = read_split_labels(splits_dir, split, len(scores))
+            low = float(np.percentile(scores, 0.5))
+            high = max(
+                float(np.percentile(scores, 99.5)),
+                threshold * 1.05,
+            )
+            if high <= low:
+                high = low + 1e-8
+            bins = np.linspace(low, high, 41)
+            if labels is None:
+                axis.hist(scores, bins=bins, alpha=0.65, label="scores")
+            else:
+                axis.hist(scores[~labels], bins=bins, alpha=0.65, label="normal")
+                axis.hist(scores[labels], bins=bins, alpha=0.65, label="suspeita")
+            axis.axvline(
+                threshold, color="black", linestyle="--", label=f"P99={threshold:.3f}"
+            )
+            axis.set_title(f"{title} - distribuição dos scores")
+            axis.set_xlabel("Score combinado")
+            axis.set_ylabel("Quantidade")
+            axis.set_xlim(low, high)
+            axis.grid(alpha=0.2)
+            axis.legend()
         figure.tight_layout()
         figure.savefig(output_dir / "score-distributions.png", dpi=150)
         return
@@ -196,14 +238,7 @@ def plot_score_distributions(metrics: dict[str, object], output_dir: Path) -> No
 
 def plot_thresholds(metrics: dict[str, object], output_dir: Path) -> None:
     if "validation_percentile_99" not in metrics:
-        threshold = float(metrics["threshold"])
-        figure, axis = plt.subplots(figsize=(7, 4))
-        bar = axis.bar(["Híbrido - P99"], [threshold], color="tab:purple")
-        axis.set_title("Limiar do modelo")
-        axis.set_ylabel("Score combinado")
-        axis.bar_label(bar, fmt="%.4f", padding=3)
-        figure.tight_layout()
-        figure.savefig(output_dir / "thresholds.png", dpi=150)
+        # O limiar já aparece como linha no gráfico de distribuição dos scores.
         return
     names = ("validation_percentile_99", "validation_best_f1", "test_percentile_99", "test_best_f1")
     labels = ("Val P99", "Val F1", "Teste P99", "Teste F1")
@@ -229,7 +264,7 @@ def main() -> None:
     plot_history(history, args.results_dir)
     plot_metrics(metrics, args.results_dir)
     plot_confusion_matrices(metrics, args.results_dir)
-    plot_score_distributions(metrics, args.results_dir)
+    plot_score_distributions(metrics, args.results_dir, args.splits_dir)
     plot_thresholds(metrics, args.results_dir)
     test_plot = generate_test_plot(
         args.splits_dir,

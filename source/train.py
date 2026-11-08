@@ -9,6 +9,8 @@ import json
 import random
 from pathlib import Path
 
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.preprocessing import StandardScaler
@@ -29,6 +31,8 @@ UNK = "<UNK>"
 VOCABULARY = (PAD, UNK) + CHARACTERS
 TOKEN_TO_INDEX = {token: index for index, token in enumerate(VOCABULARY)}
 MAX_LENGTH = 64
+EARLY_STOP_PATIENCE = 200
+NON_INTERACTIVE_BACKENDS = {"agg", "cairo", "pdf", "ps", "svg", "template"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,6 +94,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fresh", action="store_true")
+    parser.add_argument(
+        "--no-live-plot",
+        action="store_true",
+        help="Desativa a janela interativa de acompanhamento do treino",
+    )
     return parser.parse_args()
 
 
@@ -97,6 +106,73 @@ def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+class LiveTrainingPlot:
+    """Janela interativa com as curvas de perda e accuracy do treino."""
+
+    def __init__(self, enabled: bool) -> None:
+        self.figure = None
+        if not enabled:
+            return
+        if matplotlib.get_backend().lower() in NON_INTERACTIVE_BACKENDS:
+            print("Backend matplotlib sem janela; plot ao vivo desativado.")
+            return
+        try:
+            plt.ion()
+            self.figure, (self.loss_axis, self.accuracy_axis) = plt.subplots(
+                1, 2, figsize=(11, 4), num="Treinamento do autoencoder"
+            )
+            self.figure.show()
+        except Exception as error:
+            print(f"Plot ao vivo desativado: {error}")
+            self.figure = None
+
+    def update(self, history: list[dict[str, float]]) -> None:
+        if self.figure is None:
+            return
+        epochs = [item["epoch"] for item in history]
+        train_loss = [item["train_loss"] for item in history]
+        validation_loss = [item["validation_loss"] for item in history]
+        accuracy = [item["validation_accuracy"] for item in history]
+        self.loss_axis.clear()
+        self.loss_axis.plot(epochs, train_loss, label="Treino")
+        self.loss_axis.plot(epochs, validation_loss, label="Validação normal")
+        self.loss_axis.set_title("Perda de reconstrução")
+        self.loss_axis.set_xlabel("Época")
+        self.loss_axis.grid(alpha=0.25)
+        self.loss_axis.legend()
+        self.accuracy_axis.clear()
+        self.accuracy_axis.plot(
+            epochs, accuracy, color="tab:green", label="Validação - P99"
+        )
+        self.accuracy_axis.set_title("Accuracy de classificação")
+        self.accuracy_axis.set_xlabel("Época")
+        self.accuracy_axis.set_ylim(0, 1.05)
+        self.accuracy_axis.grid(alpha=0.25)
+        self.accuracy_axis.legend()
+        self.figure.tight_layout()
+        try:
+            self.figure.canvas.draw_idle()
+            self.figure.canvas.flush_events()
+            plt.pause(0.001)
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        if self.figure is not None:
+            plt.ioff()
+            plt.close(self.figure)
+            self.figure = None
+
+
+def confusion_matrix(labels: np.ndarray, predictions: np.ndarray) -> list[list[int]]:
+    """Monta [[VN, FP], [FN, VP]] para a classe positiva 'suspeita'."""
+    true_negative = int(np.sum((labels == 0) & (predictions == 0)))
+    false_positive = int(np.sum((labels == 0) & (predictions == 1)))
+    false_negative = int(np.sum((labels == 1) & (predictions == 0)))
+    true_positive = int(np.sum((labels == 1) & (predictions == 1)))
+    return [[true_negative, false_positive], [false_negative, true_positive]]
 
 
 def read_rows(path: Path) -> list[dict[str, str]]:
@@ -306,6 +382,10 @@ def main() -> None:
         shuffle=True,
     )
     numeric_loss = nn.MSELoss()
+    print_interval = max(1, args.epochs // 20)
+    total_epochs = start_epoch + args.epochs - 1
+    live_plot = LiveTrainingPlot(enabled=not args.no_live_plot)
+    epochs_without_improvement = 0
     for offset in range(args.epochs):
         model.train()
         losses = []
@@ -424,11 +504,24 @@ def main() -> None:
                 key: value.detach().clone() for key, value in model.state_dict().items()
             }
             best_optimizer_state = copy.deepcopy(optimizer.state_dict())
-        print(
-            f"Época {epoch:03d} | treino_loss={np.mean(losses):.6f} | "
-            f"val_loss={validation_loss:.6f} | "
-            f"val_accuracy={history[-1]['validation_accuracy']:.4f}"
-        )
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+        if (offset + 1) % print_interval == 0 or offset == args.epochs - 1:
+            print(
+                f"Época {epoch:03d}/{total_epochs:03d} | "
+                f"treino_loss={np.mean(losses):.6f} | "
+                f"val_loss={validation_loss:.6f} | "
+                f"val_accuracy={history[-1]['validation_accuracy']:.4f}"
+            )
+            live_plot.update(history)
+        if epochs_without_improvement >= EARLY_STOP_PATIENCE:
+            print(
+                f"Early stopping na época {epoch}: "
+                f"{EARLY_STOP_PATIENCE} épocas sem melhora na validação."
+            )
+            break
+    live_plot.close()
 
     if best_model_state is None:
         raise RuntimeError("Nenhum estado válido foi produzido durante o treinamento")
@@ -480,14 +573,20 @@ def main() -> None:
         ),
         99,
     ))
+    validation_labels = np.asarray(
+        [row["label"] != "normal" for row in validation], dtype=int
+    )
+    test_labels = np.asarray([row["label"] != "normal" for row in test], dtype=int)
+    validation_predictions = (validation_score > threshold).astype(int)
+    test_predictions = (test_score > threshold).astype(int)
     metrics = {
         "threshold": threshold,
-        "validation_accuracy": float(
-            np.mean((validation_score > threshold) == np.asarray([row["label"] != "normal" for row in validation]))
+        "validation_accuracy": float(np.mean(validation_predictions == validation_labels)),
+        "test_accuracy": float(np.mean(test_predictions == test_labels)),
+        "validation_confusion_matrix": confusion_matrix(
+            validation_labels, validation_predictions
         ),
-        "test_accuracy": float(
-            np.mean((test_score > threshold) == np.asarray([row["label"] != "normal" for row in test]))
-        ),
+        "test_confusion_matrix": confusion_matrix(test_labels, test_predictions),
         "validation_scores": validation_score.tolist(),
         "test_scores": test_score.tolist(),
         "text_weight": 1.0,
