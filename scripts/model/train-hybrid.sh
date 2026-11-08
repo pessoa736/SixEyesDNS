@@ -8,6 +8,7 @@ cd "$ROOT_DIR"
 SPLITS_DIR="${SPLITS_DIR:-data/processed/splits}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
+PLOT_AFTER_TRAINING="${PLOT_AFTER_TRAINING:-1}"
 if [[ "$PYTHON_BIN" == "python" && -x "$ROOT_DIR/.venv-amd/bin/python" ]]; then
     PYTHON_BIN="$ROOT_DIR/.venv-amd/bin/python"
 fi
@@ -29,6 +30,12 @@ echo "Saída: $OUTPUT_DIR"
     --splits-dir "$SPLITS_DIR" \
     --output-dir "$OUTPUT_DIR" \
     "$@"
+
+if [[ "$PLOT_AFTER_TRAINING" == "1" ]]; then
+    "$PYTHON_BIN" -m source.plot_training \
+        --results-dir "$OUTPUT_DIR" \
+        --test-samples "${TEST_SAMPLES:-12}"
+fi
 
 echo "Modelo salvo em: $OUTPUT_DIR/model.pt"
 echo "Histórico salvo em: $OUTPUT_DIR/history.json"

@@ -253,6 +253,13 @@ adicione `--fresh` ao comando desejado:
 ./scripts/model/train-lexical.sh --fresh
 ```
 
+Ao terminar, os wrappers geram automaticamente os gráficos no diretório do
+modelo. Para desativar essa etapa:
+
+```bash
+PLOT_AFTER_TRAINING=0 ./scripts/model/train-lexical.sh
+```
+
 Para executar os três treinamentos em sequência:
 
 ```bash
