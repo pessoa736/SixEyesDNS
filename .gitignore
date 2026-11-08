@@ -226,4 +226,4 @@ archive/
 data/raw/
 
 # Resultados locais e temporários do treinamento
-results/autoencoder/*.json
+results/**/*.json
