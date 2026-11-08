@@ -173,6 +173,10 @@ perda reduzida (`--pad-loss-weight`, padrão `0.2`) nas posições `PAD`; assim 
 modelo aprende a encerrar a sequência sem deixar o preenchimento dominar a
 reconstrução. O score lexical continua considerando somente posições reais.
 
+Na visualização de teste, `--samples` deve ser par: metade das amostras é
+selecionada da classe `normal` e metade da classe `suspeita`, permitindo uma
+comparação equilibrada no Matplotlib.
+
 ### Avaliação
 
 O pipeline deve gerar em `results/` métricas, CSVs e figuras para ROC-AUC,

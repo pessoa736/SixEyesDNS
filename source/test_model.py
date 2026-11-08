@@ -38,6 +38,20 @@ def read_rows(path: Path) -> list[dict[str, str]]:
     return rows
 
 
+def balanced_rows(rows: list[dict[str, str]], samples: int) -> list[dict[str, str]]:
+    """Seleciona igualmente exemplos normais e suspeitos para a visualização."""
+    if samples <= 0 or samples % 2:
+        raise ValueError("--samples precisa ser um número positivo e par")
+    normal = [row for row in rows if row.get("label") == "normal"]
+    suspicious = [row for row in rows if row.get("label") != "normal"]
+    per_class = samples // 2
+    if len(normal) < per_class or len(suspicious) < per_class:
+        raise ValueError(
+            f"O teste precisa de pelo menos {per_class} exemplos de cada classe"
+        )
+    return normal[:per_class] + suspicious[:per_class]
+
+
 def decode_tokens(logits: torch.Tensor) -> list[str]:
     indices = logits.argmax(dim=1).cpu().numpy()
     decoded = []
@@ -60,7 +74,7 @@ def generate_test_plot(
     if samples <= 0:
         raise ValueError("--samples precisa ser positivo")
     checkpoint = torch.load(results_dir / "model.pt", map_location="cpu")
-    rows = read_rows(splits_dir / "test.csv")[:samples]
+    rows = balanced_rows(read_rows(splits_dir / "test.csv"), samples)
     scaler = StandardScaler()
     scaler.mean_ = np.asarray(checkpoint["scaler_mean"], dtype=np.float64)
     scaler.scale_ = np.asarray(checkpoint["scaler_scale"], dtype=np.float64)

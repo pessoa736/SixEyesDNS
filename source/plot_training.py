@@ -24,7 +24,12 @@ def parse_args() -> argparse.Namespace:
         "--splits-dir", type=Path, default=Path("data/processed/splits")
     )
     parser.add_argument("--show", action="store_true", help="Abre os gráficos ao final")
-    parser.add_argument("--test-samples", type=int, default=6)
+    parser.add_argument(
+        "--test-samples",
+        type=int,
+        default=6,
+        help="Total de exemplos no gráfico, igualmente dividido entre as classes",
+    )
     return parser.parse_args()
 
 
