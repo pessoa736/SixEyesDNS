@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 SPLITS_DIR="${SPLITS_DIR:-data/processed/splits}"
-OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder}"
+OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder-hybrid}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 PLOT_AFTER_TRAINING="${PLOT_AFTER_TRAINING:-1}"
 LEXICAL_CHECKPOINT="${LEXICAL_CHECKPOINT:-results/autoencoder-lexical/model.pt}"
