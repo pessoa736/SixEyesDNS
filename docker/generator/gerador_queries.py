@@ -51,6 +51,79 @@ WORDS = (
     "status",
     "telemetry",
 )
+# Temas de entretenimento do laboratorio: memes classicos e Jujutsu Kaisen.
+MEMES = (
+    "doge",
+    "pepe",
+    "nyancat",
+    "trollface",
+    "rickroll",
+    "harambe",
+    "shrek",
+    "grumpycat",
+    "stonks",
+    "distracted-bf",
+    "drakeposting",
+    "womanyelling",
+    "surprised-pikachu",
+    "thisisfine",
+    "gigachad",
+    "sus-amogus",
+)
+JJK = (
+    "gojo",
+    "sukuna",
+    "itadori",
+    "megumi",
+    "nobara",
+    "nanami",
+    "toji",
+    "geto",
+    "mahito",
+    "jogo",
+    "hanami",
+    "choso",
+    "yuta",
+    "maki",
+    "panda",
+    "inumaki",
+    "hakari",
+    "kashimo",
+    "kenjaku",
+    "miwa",
+    "todo",
+    "mai",
+    "kamo",
+    "mechamaru",
+)
+JJK_TERMS = (
+    "domain-expansion",
+    "cursed-energy",
+    "hollow-purple",
+    "limitless",
+    "black-flash",
+    "malevolent-shrine",
+    "infinity",
+    "binding-vow",
+    "cursed-technique",
+    "reverse-cursed",
+    "ten-shadows",
+    "ratio-technique",
+)
+MEME_WORDS = (
+    "meme",
+    "memes",
+    "shitpost",
+    "dank",
+    "viral",
+    "clip",
+    "gif",
+    "reaction",
+    "lore",
+    "wiki",
+    "fanart",
+    "clipes",
+)
 
 
 def random_bytes(size: int = 18) -> bytes:
@@ -90,7 +163,11 @@ def normal_domain(index: int) -> tuple[str, str, str, str]:
     environment = ENVIRONMENTS[(index // 17) % len(ENVIRONMENTS)]
     platform = PLATFORMS[(index // 31) % len(PLATFORMS)]
     word = WORDS[(index // 43) % len(WORDS)]
-    pattern = index % 10
+    meme = MEMES[(index // 13) % len(MEMES)]
+    meme_word = MEME_WORDS[(index // 7) % len(MEME_WORDS)]
+    character = JJK[(index // 11) % len(JJK)]
+    term = JJK_TERMS[(index // 19) % len(JJK_TERMS)]
+    pattern = index % 16
 
     if pattern == 0:
         return f"{service}.{platform}.test", "normal", service, "normal"
@@ -131,11 +208,48 @@ def normal_domain(index: int) -> tuple[str, str, str, str]:
             service,
             "normal_hard",
         )
+    if pattern == 9:
+        return (
+            f"assets-{index % 64:02x}.{service}.{platform}.test",
+            "normal",
+            service,
+            "normal_hard",
+        )
+    if pattern == 10:
+        return (
+            f"{meme}-{index % 40:02d}.{meme_word}.test",
+            "normal",
+            "memes",
+            "normal_meme",
+        )
+    if pattern == 11:
+        return (
+            f"{meme_word}-{index % 60:02d}.{meme}.test",
+            "normal",
+            "memes",
+            "normal_meme",
+        )
+    if pattern == 12:
+        return (
+            f"{character}-{index % 24:02d}.jjk.test",
+            "normal",
+            "jjk",
+            "normal_jjk",
+        )
+    if pattern == 13:
+        return f"{term}.{character}.jjk.test", "normal", "jjk", "normal_jjk"
+    if pattern == 14:
+        return (
+            f"{character}-{index % 90:02d}.{region}.jjk.test",
+            "normal",
+            "jjk",
+            "normal_jjk",
+        )
     return (
-        f"assets-{index % 64:02x}.{service}.{platform}.test",
+        f"{meme}.{environment}.{platform}.test",
         "normal",
-        service,
-        "normal_hard",
+        "memes",
+        "normal_meme",
     )
 
 
