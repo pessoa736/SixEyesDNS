@@ -1,4 +1,9 @@
-"""Extração e transformação dos atributos lexicais e do tipo DNS."""
+"""Fonte única de verdade: normalização, vocabulário, tokenização e atributos.
+
+Os 42 atributos numéricos do modelo são somente lexicais (6 escalares e 36
+frequências de caracteres). ``label``, ``family``, ``query_type``, ``seed``,
+IP e cliente são metadados e nunca entram na matriz de entrada.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,12 @@ import numpy as np
 
 
 CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789")
+TOKEN_CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789-_.")
+PAD = "<PAD>"
+UNK = "<UNK>"
+VOCABULARY = (PAD, UNK) + TOKEN_CHARACTERS
+TOKEN_TO_INDEX = {token: index for index, token in enumerate(VOCABULARY)}
+MAX_LENGTH = 64
 LAB_SUFFIXES = (".test", ".example", ".invalid")
 SCALAR_FEATURES = (
     "total_length",
@@ -23,14 +34,29 @@ QUERY_TYPES = ("A", "AAAA", "CNAME", "TXT", "NS", "MX", "PTR")
 FAMILIES = ("normal", "base32", "hex", "base64")
 QUERY_TYPE_COLUMNS = tuple(f"is_{query_type}" for query_type in QUERY_TYPES)
 FAMILY_COLUMNS = tuple(f"is_family_{family}" for family in FAMILIES)
-FEATURE_COLUMNS = (
-    SCALAR_FEATURES
-    + tuple(f"char_freq_{character}" for character in CHARACTERS)
-    + QUERY_TYPE_COLUMNS
+FEATURE_COLUMNS = SCALAR_FEATURES + tuple(
+    f"char_freq_{character}" for character in CHARACTERS
 )
 DATASET_CATEGORICAL_COLUMNS = QUERY_TYPE_COLUMNS + FAMILY_COLUMNS
+METADATA_COLUMNS = (
+    "label",
+    "family",
+    "query_type",
+    "seed",
+    "profile",
+    "server",
+    "sequence",
+    "timestamp",
+    "ip",
+    "client",
+    "cliente",
+)
 LOG_FEATURES = {"total_length", "label_count", "max_label_length"}
 VALID_DOMAIN = re.compile(r"^[a-z0-9._-]+$")
+
+_METADATA_LEAK = set(FEATURE_COLUMNS) & set(METADATA_COLUMNS)
+if _METADATA_LEAK:
+    raise AssertionError(f"Metadados na lista de features: {sorted(_METADATA_LEAK)}")
 
 
 def normalize_domain(domain: str) -> str:
@@ -89,17 +115,25 @@ def extract_features(
     return features
 
 
+def encode_domain(domain: str, max_length: int = MAX_LENGTH) -> np.ndarray:
+    """Tokeniza um domínio normalizado na ordem canônica do vocabulário."""
+    normalized = normalize_domain(domain)[:max_length]
+    encoded = np.full(max_length, TOKEN_TO_INDEX[PAD], dtype=np.int64)
+    for column, character in enumerate(normalized):
+        encoded[column] = TOKEN_TO_INDEX.get(character, TOKEN_TO_INDEX[UNK])
+    return encoded
+
+
 def transform_features(rows: list[dict[str, str]]) -> np.ndarray:
-    """Converte linhas CSV em uma matriz na ordem canônica dos atributos."""
+    """Converte linhas CSV em uma matriz na ordem canônica dos atributos.
+
+    Falha explicitamente se alguma feature estiver ausente da linha; metadados
+    nunca são derivados nem aceitos como entrada.
+    """
 
     def value(row: dict[str, str], column: str) -> float:
-        if column in row:
-            return float(row[column])
-        if column in QUERY_TYPE_COLUMNS:
-            return float(row.get("query_type") == column.removeprefix("is_"))
-        if column in FAMILY_COLUMNS:
-            family = column.removeprefix("is_family_")
-            return float(row.get("family") == family)
+        if column not in row:
+            raise ValueError(f"Feature ausente na linha: {column}")
         return float(row[column])
 
     values = np.asarray(

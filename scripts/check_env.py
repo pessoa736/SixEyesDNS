@@ -1,12 +1,16 @@
+"""Verifica o ambiente Python e as dependências do projeto."""
+
 import sys
 
+import matplotlib
 import numpy as np
-import pandas as pd
+import sklearn
 import torch
 
 print(f"Python: {sys.version.split()[0]}")
 print(f"NumPy: {np.__version__}")
-print(f"pandas: {pd.__version__}")
+print(f"scikit-learn: {sklearn.__version__}")
+print(f"matplotlib: {matplotlib.__version__}")
 print(f"PyTorch: {torch.__version__}")
 print(f"CUDA disponível: {torch.cuda.is_available()}")
 

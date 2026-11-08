@@ -19,19 +19,29 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 if __package__:
-    from .features import FEATURE_COLUMNS, normalize_domain, transform_features
+    from .features import (
+        FEATURE_COLUMNS,
+        MAX_LENGTH,
+        PAD,
+        TOKEN_TO_INDEX,
+        VOCABULARY,
+        encode_domain,
+        transform_features,
+    )
     from .models import CharAutoencoder, HybridAutoencoder
 else:
-    from features import FEATURE_COLUMNS, normalize_domain, transform_features
+    from features import (
+        FEATURE_COLUMNS,
+        MAX_LENGTH,
+        PAD,
+        TOKEN_TO_INDEX,
+        VOCABULARY,
+        encode_domain,
+        transform_features,
+    )
     from models import CharAutoencoder, HybridAutoencoder
 
 
-CHARACTERS = tuple("abcdefghijklmnopqrstuvwxyz0123456789-_.")
-PAD = "<PAD>"
-UNK = "<UNK>"
-VOCABULARY = (PAD, UNK) + CHARACTERS
-TOKEN_TO_INDEX = {token: index for index, token in enumerate(VOCABULARY)}
-MAX_LENGTH = 64
 EARLY_STOP_PATIENCE = 200
 NON_INTERACTIVE_BACKENDS = {"agg", "cairo", "pdf", "ps", "svg", "template"}
 
@@ -185,11 +195,7 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 
 
 def encode_domains(rows: list[dict[str, str]]) -> torch.Tensor:
-    encoded = np.full((len(rows), MAX_LENGTH), TOKEN_TO_INDEX[PAD], dtype=np.int64)
-    for row_index, row in enumerate(rows):
-        domain = normalize_domain(row["query"])[:MAX_LENGTH]
-        for column, character in enumerate(domain):
-            encoded[row_index, column] = TOKEN_TO_INDEX.get(character, TOKEN_TO_INDEX[UNK])
+    encoded = np.stack([encode_domain(row["query"]) for row in rows])
     return torch.from_numpy(encoded)
 
 

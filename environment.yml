@@ -5,12 +5,10 @@ channels:
 
 dependencies:
   - python=3.12
-  - numpy
-  - pandas
-  - scikit-learn
-  - matplotlib
-  - pyyaml
-  - pytest
+  - numpy=2.5
+  - scikit-learn=1.9
+  - matplotlib=3.11
+  - pytest=9.2
   - pip
   - pip:
       - -r requirements.txt

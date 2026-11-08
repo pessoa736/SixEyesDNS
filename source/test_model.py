@@ -12,13 +12,27 @@ import torch
 from sklearn.preprocessing import StandardScaler
 
 if __package__:
-    from .features import FEATURE_COLUMNS, normalize_domain, transform_features
+    from .features import (
+        FEATURE_COLUMNS,
+        MAX_LENGTH,
+        TOKEN_TO_INDEX,
+        VOCABULARY,
+        normalize_domain,
+        transform_features,
+    )
     from .models import CharAutoencoder, HybridAutoencoder
-    from .train import MAX_LENGTH, TOKEN_TO_INDEX, VOCABULARY, encode_domains
+    from .train import encode_domains
 else:
-    from features import FEATURE_COLUMNS, normalize_domain, transform_features
+    from features import (
+        FEATURE_COLUMNS,
+        MAX_LENGTH,
+        TOKEN_TO_INDEX,
+        VOCABULARY,
+        normalize_domain,
+        transform_features,
+    )
     from models import CharAutoencoder, HybridAutoencoder
-    from train import MAX_LENGTH, TOKEN_TO_INDEX, VOCABULARY, encode_domains
+    from train import encode_domains
 
 
 def parse_args() -> argparse.Namespace:

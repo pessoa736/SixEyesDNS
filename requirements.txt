@@ -1,4 +1,5 @@
 # Dependências instaladas via pip durante a criação do ambiente Conda.
 # Em máquinas com GPU, substitua torch pela variante recomendada pelo NPAD.
-torch
-opencv-python
+# dnspython é usado apenas dentro do container do gerador.
+torch==2.15.0
+pytest==9.2.0

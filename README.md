@@ -129,24 +129,28 @@ arquivos em `data/raw/`. O `process_raw.py` aceita múltiplos logs e entende
 os formatos do dnsmasq (`query[TIPO] nome from IP`) e do BIND9
 (`query: nome IN TIPO`); por padrão, o script usa
 `data/raw/dnsmasq/dnsmasq.log` e `data/raw/bind9/queries.log` quando
-presentes. A implementação futura deve transformar
-`source/features.py` na única fonte da verdade para:
+presentes. `source/features.py` é a única fonte da verdade para:
 
 - normalização do domínio, removendo `.test`;
 - atributos lexicais;
-- tokenização de caracteres;
+- vocabulário e tokenização de caracteres;
 - normalização numérica ajustada somente nos normais de treino.
 
-As features do modelo devem ser uma lista explícita de 42 atributos. `label`,
-`family`, `query_type`, `seed`, IP e cliente devem permanecer separados como
-metadados e passar por uma verificação automática contra vazamento.
+As features do modelo são uma lista explícita de 42 atributos lexicais (6
+escalares e 36 frequências de caracteres). `label`, `family`, `query_type`,
+`seed`, IP e cliente permanecem separados como metadados: `features.py`
+falha na importação se algum metadado entrar na lista e
+`transform_features` rejeita linhas incompletas em vez de derivar valores de
+metadados.
 
 ### Separação dos dados
 
-O treino deve conter somente consultas `normal`. Validação e teste podem conter
-normais e anomalias, mas não podem compartilhar domínios. O split deve falhar
-se houver interseção e deve registrar em `summary.json` linhas e domínios
-únicos por split, classe e família.
+O treino contém somente consultas `normal`. Validação e teste podem conter
+normais e anomalias, mas não compartilham domínios. O split falha se houver
+interseção e registra em `summary.json` linhas e domínios únicos por split,
+classe e família. Com `--holdout-family <família>`, uma família de anomalia
+inteira vai somente para o teste, medindo generalização para um tipo nunca
+visto na validação.
 
 O casamento entre log e rótulos precisa considerar execuções concatenadas e
 duplicatas. O arquivo de rótulos agora tem timestamp, mas o log do dnsmasq não
@@ -243,8 +247,9 @@ conda env create -f environment.yml
 conda activate sixeyesdns
 ```
 
-As versões das dependências devem permanecer fixadas em
+As versões das dependências permanecem fixadas em
 [requirements.txt](requirements.txt) e [environment.yml](environment.yml).
+Para conferir o ambiente ativo, execute `python scripts/check_env.py`.
 
 ### Coleta local
 
@@ -311,6 +316,11 @@ RESULTS_DIR=results/autoencoder-lexical \
 RESULTS_DIR=results/autoencoder-lexical ./scripts/test/test-model.sh
 RESULTS_DIR=results/autoencoder-lexical ./scripts/test/plot-model.sh
 ```
+
+`run-tests.sh` executa o pytest sobre [`tests/`](tests/), que cobre o
+determinismo das features e do split, a ausência de metadados na matriz de
+entrada, a ausência de interseção de domínios entre os splits e o holdout de
+família.
 
 O teste visual seleciona igualmente exemplos normais e suspeitos; use um valor
 par em `SAMPLES` ou `TEST_SAMPLES`.
