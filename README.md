@@ -80,6 +80,9 @@ dashboard mostra consultas DNS e requisições backend por aplicação, serviço
 rota, status e latência. Os dados ficam em
 `data/raw/dashboard/traffic_summary.json` e
 `data/raw/dashboard/backend_traffic.json`.
+Além das tabelas, a interface possui gráficos SVG de consultas por família DNS,
+requisições por aplicação e requisições por serviço, atualizados a cada dois
+segundos sem dependências externas.
 
 ### Processamento e atributos
 

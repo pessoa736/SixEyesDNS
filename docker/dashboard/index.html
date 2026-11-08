@@ -14,6 +14,16 @@
     table { border-collapse:collapse; width:100%; margin-top:24px; }
     th,td { border-bottom:1px solid #374151; padding:10px; text-align:left; }
     .muted { color:#9ca3af; }
+    .chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; margin-top:24px; }
+    .chart-card { background:#1f2937; border:1px solid #374151; border-radius:10px; padding:18px; }
+    .chart-card h2 { margin:0 0 12px; font-size:1.05rem; }
+    svg { width:100%; height:240px; overflow:visible; }
+    .bar { fill:#60a5fa; }
+    .bar.backend { fill:#34d399; }
+    .bar.error { fill:#fb7185; }
+    .bar-label { fill:#d1d5db; font-size:11px; }
+    .bar-value { fill:#f9fafb; font-size:11px; font-weight:700; }
+    .axis { stroke:#4b5563; stroke-width:1; }
   </style>
 </head>
 <body>
@@ -32,6 +42,20 @@
     <thead><tr><th>Família</th><th>Consultas</th><th>Domínios únicos</th></tr></thead>
     <tbody id="families"></tbody>
   </table>
+  <section class="chart-grid">
+    <div class="chart-card">
+      <h2>Consultas DNS por família</h2>
+      <svg id="dns-chart" role="img" aria-label="Consultas DNS por família"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Requisições por aplicação</h2>
+      <svg id="application-chart" role="img" aria-label="Requisições por aplicação"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Requisições por serviço</h2>
+      <svg id="service-chart" role="img" aria-label="Requisições por serviço"></svg>
+    </div>
+  </section>
   <h2>Serviços falsos</h2>
   <table>
     <thead><tr><th>Serviço</th><th>Requisições</th><th>Latência média</th></tr></thead>
@@ -45,6 +69,51 @@
   <p id="updated" class="muted"></p>
 </main>
 <script>
+function drawBars(selector, entries, className) {
+  const svg = document.querySelector(selector);
+  const width = 480;
+  const height = 220;
+  const left = 112;
+  const top = 16;
+  const barHeight = 24;
+  const gap = 10;
+  const values = entries.map((entry) => entry[1]);
+  const max = Math.max(...values, 1);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.replaceChildren();
+  const axis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  axis.setAttribute('x1', left);
+  axis.setAttribute('x2', left);
+  axis.setAttribute('y1', top - 4);
+  axis.setAttribute('y2', top + entries.length * (barHeight + gap));
+  axis.setAttribute('class', 'axis');
+  svg.appendChild(axis);
+  entries.slice(0, 7).forEach(([name, value], index) => {
+    const y = top + index * (barHeight + gap);
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', left - 8);
+    label.setAttribute('y', y + 17);
+    label.setAttribute('text-anchor', 'end');
+    label.setAttribute('class', 'bar-label');
+    label.textContent = name.length > 16 ? name.slice(0, 15) + '…' : name;
+    svg.appendChild(label);
+    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bar.setAttribute('x', left + 4);
+    bar.setAttribute('y', y);
+    bar.setAttribute('width', Math.max((width - left - 28) * value / max, 2));
+    bar.setAttribute('height', barHeight);
+    bar.setAttribute('rx', 4);
+    bar.setAttribute('class', `bar ${className}`);
+    svg.appendChild(bar);
+    const count = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    count.setAttribute('x', left + 10 + (width - left - 28) * value / max);
+    count.setAttribute('y', y + 17);
+    count.setAttribute('class', 'bar-value');
+    count.textContent = value;
+    svg.appendChild(count);
+  });
+}
+
 async function update() {
   const response = await fetch('/traffic_summary.json?ts=' + Date.now());
   if (!response.ok) return;
@@ -71,6 +140,23 @@ async function update() {
   document.querySelector('#applications').innerHTML = Object.entries(backend.applications || {})
     .map(([name, count]) => `<tr><td>${name}</td><td>${count}</td></tr>`)
     .join('');
+  drawBars(
+    '#dns-chart',
+    Object.entries(data.families || {}).map(([name, value]) => [name, value.queries]).sort((a, b) => b[1] - a[1]),
+    ''
+  );
+  drawBars(
+    '#application-chart',
+    Object.entries(backend.applications || {}).sort((a, b) => b[1] - a[1]),
+    'backend'
+  );
+  drawBars(
+    '#service-chart',
+    Object.entries(backend.services || {})
+      .map(([name, value]) => [name, value.requests])
+      .sort((a, b) => b[1] - a[1]),
+    'backend'
+  );
   document.querySelector('#updated').textContent = 'Atualizado em ' + data.updated_at;
 }
 update();

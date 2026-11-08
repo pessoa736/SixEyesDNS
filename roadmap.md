@@ -106,6 +106,7 @@ Status: pendente; entrega central.
       funcionar.
 - [x] Disponibilizar dashboard local em `http://127.0.0.1:8080`.
 - [x] Monitorar aplicações, serviços, rotas, erros e latência no dashboard.
+- [x] Adicionar gráficos visuais de famílias DNS, aplicações e serviços.
 
 ## Fase 5 — Relatório e apresentação
 
