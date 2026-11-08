@@ -135,6 +135,16 @@ Status: documentação inicial concluída; consolidação final pendente.
 - [ ] Incluir somente números gerados e verificáveis; usar
       `TODO(resultados)` enquanto faltarem.
 - [ ] Incluir pipeline e arquitetura híbrida em Mermaid.
+- [ ] Criar mapa Mermaid do fluxo de desenvolvimento (fases, branches e
+      commits por fase).
+- [ ] Criar mapa Mermaid do fluxo de treinamento (dados, features, modos
+      lexical/semântico/híbrido, checkpoints e gráficos).
+- [ ] Criar mapa Mermaid da estrutura de classes (modelos, encoders,
+      decoders e relações entre os módulos de `source/`).
+- [ ] Criar mapa Mermaid do fluxo de execução (processamento, split, treino,
+      avaliação e demo, de ponta a ponta).
+- [ ] Criar mapa Mermaid dos casos de uso (atores, laboratório local, treino,
+      avaliação, demonstração e apresentação).
 - [ ] Criar `docs/roteiro-apresentacao.md` para 10 minutos:
       introdução 1,5; pipeline 2; modelos 2; resultados 3; demo 1,5.
 - [ ] Listar as figuras necessárias para a apresentação.
