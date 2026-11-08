@@ -84,6 +84,13 @@ Além das tabelas, a interface possui gráficos SVG de consultas por família DN
 requisições por aplicação e requisições por serviço, atualizados a cada dois
 segundos sem dependências externas.
 
+Para aproximar padrões orgânicos sem acessar a Internet, os clients navegam
+somente por sites sintéticos `.test`, com pesos de popularidade, sessões de
+2–6 páginas, pausas variáveis, user agents fictícios, períodos de leitura e
+variação entre aplicações. Os sites são `portal.atlas.test`,
+`docs.brisa.test`, `status.cobalto.test`, `shop.lumen.test` e
+`news.nuvem.test`. A telemetria também registra a distribuição por site.
+
 ### Processamento e atributos
 
 O fluxo atual é:

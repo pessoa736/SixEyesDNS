@@ -47,6 +47,11 @@ def write_snapshot() -> None:
                 for key, count in COUNTERS.items()
                 if key.startswith("app:")
             ),
+            "sites": dict(
+                (key.removeprefix("site:"), count)
+                for key, count in COUNTERS.items()
+                if key.startswith("site:")
+            ),
             "services": by_service,
             "errors": COUNTERS["errors"],
             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -93,6 +98,8 @@ class Handler(BaseHTTPRequestHandler):
         latency_ms = (time.perf_counter() - started) * 1000
         with LOCK:
             COUNTERS[f"app:{application}"] += 1
+            site = self.headers.get("X-Synthetic-Site", "unknown")
+            COUNTERS[f"site:{site}"] += 1
             COUNTERS[f"route:{service}:{route}"] += 1
             TOTAL_LATENCY_MS[f"{service}:{route}"] += latency_ms
         body = json.dumps(payload).encode("utf-8")

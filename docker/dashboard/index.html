@@ -36,6 +36,7 @@
     <div class="card"><div class="muted">Suspeitas</div><div id="suspeita" class="value">0</div></div>
     <div class="card"><div class="muted">Domínios únicos</div><div id="domains" class="value">0</div></div>
     <div class="card"><div class="muted">Requisições backend</div><div id="backend-requests" class="value">0</div></div>
+    <div class="card"><div class="muted">Sites sintéticos</div><div id="synthetic-sites" class="value">0</div></div>
   </section>
   <h2>Tráfego DNS</h2>
   <table>
@@ -54,6 +55,10 @@
     <div class="chart-card">
       <h2>Requisições por serviço</h2>
       <svg id="service-chart" role="img" aria-label="Requisições por serviço"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Navegação por site sintético</h2>
+      <svg id="site-chart" role="img" aria-label="Navegação por site sintético"></svg>
     </div>
   </section>
   <h2>Serviços falsos</h2>
@@ -125,6 +130,7 @@ async function update() {
   document.querySelector('#suspeita').textContent = data.labels.suspeita || 0;
   document.querySelector('#domains').textContent = data.unique_domains;
   document.querySelector('#backend-requests').textContent = backend.total_requests || 0;
+  document.querySelector('#synthetic-sites').textContent = Object.keys(backend.sites || {}).length;
   document.querySelector('#families').innerHTML = Object.entries(data.families)
     .map(([name, value]) => `<tr><td>${name}</td><td>${value.queries}</td><td>${value.unique_domains}</td></tr>`)
     .join('');
@@ -155,6 +161,11 @@ async function update() {
     Object.entries(backend.services || {})
       .map(([name, value]) => [name, value.requests])
       .sort((a, b) => b[1] - a[1]),
+    'backend'
+  );
+  drawBars(
+    '#site-chart',
+    Object.entries(backend.sites || {}).sort((a, b) => b[1] - a[1]),
     'backend'
   );
   document.querySelector('#updated').textContent = 'Atualizado em ' + data.updated_at;
