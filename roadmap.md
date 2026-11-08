@@ -43,6 +43,9 @@ Status: parcialmente implementada.
 - [ ] Separar explicitamente features e metadados.
 - [ ] Rejeitar automaticamente `label`, `family`, `query_type`, `seed`, IP e
       cliente na matriz de entrada.
+- [ ] Remover os indicadores de tipo DNS (`is_A`, `is_TXT` etc.) das features,
+      pois derivam de `query_type`, que é metadado; retreinar os modelos após
+      a correção.
 - [ ] Fazer `process_raw.py` e `split_dataset.py` funcionarem com
       `python -m source.<modulo>`.
 - [ ] Adicionar `--holdout-family`.
@@ -101,11 +104,31 @@ pendente.
 - [ ] Implementar baselines de entropia e Isolation Forest.
 - [ ] Implementar `source/evaluate.py` com métricas, figuras, prevalência,
       recall a FPR de 1% e recall por família.
+- [ ] Reportar precisão, recall, F1, FPR e ROC-AUC além da acurácia, com
+      curvas ROC e precisão-recall.
+- [ ] Reportar métricas por registro e por domínio único; investigar os
+      falsos positivos por domínio (lexical: 161 registros/10 domínios;
+      híbrido: 93/6 no teste atual).
 - [ ] Avaliar leave-one-family-out sem escolher limiar no teste.
 - [ ] Adicionar explicabilidade por atributo e por caractere.
 - [ ] Testar shapes, parâmetros, treino de uma época e avaliação em dataset
       mínimo.
 - [ ] Gerar tabela de ablação em `results/`.
+- [ ] Corrigir os rótulos das perdas nos gráficos: CE no lexical, MSE no
+      semântico e perda combinada no híbrido.
+- [ ] Exibir matrizes de confusão com contagens e percentuais por classe,
+      com texto legível sobre células escuras.
+- [ ] Adicionar zoom próximo ao limiar nas distribuições de score, com eixo
+      comum entre validação e teste e contagem dos pontos fora do recorte.
+- [ ] Verificar a correspondência entre scores salvos e rótulos do split
+      (ordem e quantidade) antes de plotar as distribuições.
+- [ ] Marcar a melhor época (checkpoint) nos gráficos de perda e adicionar
+      zoom do trecho final do treinamento.
+- [ ] Reorganizar `test-samples.png`: menos exemplos por figura, escala de
+      cores comum, erro por caractere e numérico no híbrido e sem
+      reconstrução textual no modo semântico.
+- [ ] Diversificar os perfis normais difíceis e avaliar famílias não vistas
+      para reduzir o FPR do lexical/híbrido no teste.
 
 ## Fase 4 — Demonstração
 
