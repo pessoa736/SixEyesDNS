@@ -76,17 +76,23 @@ def generate_test_plot(
     )
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
+    mode = checkpoint.get("mode", "hybrid")
     with torch.no_grad():
         logits, reconstructed_numeric = model(
-            characters, torch.from_numpy(numeric)
+            characters, torch.from_numpy(numeric), mode=mode
         )
     reconstructed_tokens = decode_tokens(logits)
-    text_error = torch.nn.functional.cross_entropy(
+    token_error = torch.nn.functional.cross_entropy(
         logits,
         characters,
         ignore_index=TOKEN_TO_INDEX["<PAD>"],
         reduction="none",
-    ).mean(dim=1).numpy()
+    )
+    valid_tokens = (characters != TOKEN_TO_INDEX["<PAD>"]).sum(dim=1).clamp_min(1)
+    text_error = (
+        token_error.masked_fill(characters == TOKEN_TO_INDEX["<PAD>"], 0.0).sum(dim=1)
+        / valid_tokens
+    ).numpy()
     numeric_error = ((reconstructed_numeric.numpy() - numeric) ** 2).mean(axis=1)
     metrics_path = results_dir / "metrics.json"
     metrics = {}
@@ -98,10 +104,17 @@ def generate_test_plot(
     text_normalized = (text_error - float(checkpoint["text_mean"])) / float(
         checkpoint["text_std"]
     )
-    numeric_normalized = (
-        numeric_error * numeric_weight - float(checkpoint["numeric_mean"])
+    numeric_normalized = numeric_weight * (
+        numeric_error - float(checkpoint["numeric_mean"])
     ) / float(checkpoint["numeric_std"])
-    scores = text_normalized + numeric_normalized
+    if mode == "lexical":
+        scores = text_normalized
+    elif mode == "semantic":
+        scores = (numeric_error - float(checkpoint["numeric_mean"])) / float(
+            checkpoint["numeric_std"]
+        )
+    else:
+        scores = text_normalized + numeric_normalized
     threshold = float(checkpoint["threshold"])
     predictions = scores > threshold
 

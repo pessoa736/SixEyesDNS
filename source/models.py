@@ -74,12 +74,28 @@ class HybridAutoencoder(nn.Module):
         )
 
     def forward(
-        self, characters: torch.Tensor, numeric: torch.Tensor
+        self,
+        characters: torch.Tensor,
+        numeric: torch.Tensor,
+        mode: str = "hybrid",
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        embedded = self.embedding(characters).transpose(1, 2)
-        encoded_characters = self.char_encoder(embedded)
-        char_position_encoding = encoded_characters.flatten(start_dim=1)
-        numeric_encoding = self.numeric_encoder(numeric)
+        if mode not in {"lexical", "semantic", "hybrid"}:
+            raise ValueError(f"Modo de autoencoder inválido: {mode}")
+        if mode == "semantic":
+            char_position_encoding = torch.zeros(
+                (characters.shape[0], 64 * (self.max_length // 2)),
+                device=characters.device,
+            )
+        else:
+            embedded = self.embedding(characters).transpose(1, 2)
+            encoded_characters = self.char_encoder(embedded)
+            char_position_encoding = encoded_characters.flatten(start_dim=1)
+        if mode == "lexical":
+            numeric_encoding = torch.zeros(
+                (numeric.shape[0], 16), device=numeric.device
+            )
+        else:
+            numeric_encoding = self.numeric_encoder(numeric)
         latent = self.latent(
             torch.cat((char_position_encoding, numeric_encoding), dim=1)
         )

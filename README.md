@@ -148,6 +148,31 @@ score = z(entropia_cruzada_dos_caracteres)
 `lambda` pode ser alterado pela CLI, por exemplo `--lambda 0.7`. Os termos são
 padronizados usando somente os normais da validação antes da combinação.
 
+Também é possível treinar cada fonte de informação isoladamente:
+
+```bash
+# somente a sequência de caracteres (erro lexical/CE)
+python -m source.train --mode lexical --fresh
+
+# somente os 42 atributos numéricos (erro semântico/MSE)
+python -m source.train --mode semantic --fresh
+
+# os dois ramos, padrão
+python -m source.train --mode hybrid --fresh
+```
+
+O modo semântico usa os atributos agregados do domínio (entropia, proporções,
+tamanhos e frequências), enquanto o modo lexical usa a sequência de caracteres.
+Em todos os modos, o treino continua usando apenas exemplos normais.
+
+O decoder de caracteres produz uma matriz fixa de 64 posições porque os
+domínios são preenchidos ou cortados para `MAX_LENGTH`. Ele não está tentando
+acrescentar caracteres ao domínio real: está reconstruindo uma sequência
+acolchoada. Nas posições `PAD`, a perda de treinamento é ignorada, então essas
+posições não recebem um sinal forte para serem previstas como `PAD`; por isso a
+saída pode parecer preencher todo o espaço. A visualização encerra a saída ao
+primeiro `PAD`, e o score lexical considera somente posições reais.
+
 ### Avaliação
 
 O pipeline deve gerar em `results/` métricas, CSVs e figuras para ROC-AUC,

@@ -1,4 +1,4 @@
-"""Treina o autoencoder de caracteres e atributos numéricos."""
+"""Treina os ramos lexical, semântico ou híbrido do autoencoder."""
 
 from __future__ import annotations
 
@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--latent-dim", type=int, default=16)
+    parser.add_argument(
+        "--mode",
+        choices=("lexical", "semantic", "hybrid"),
+        default="hybrid",
+        help="Ramo treinado: caracteres, atributos numéricos ou ambos",
+    )
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument(
         "--weight-decay",
@@ -114,16 +120,21 @@ def score_batch(
     model: HybridAutoencoder,
     characters: torch.Tensor,
     numeric: torch.Tensor,
-    numeric_weight: float,
+    mode: str,
 ) -> tuple[np.ndarray, np.ndarray]:
     with torch.no_grad():
-        logits, reconstructed_numeric = model(characters, numeric)
-        text_error = nn.functional.cross_entropy(
+        logits, reconstructed_numeric = model(characters, numeric, mode=mode)
+        token_loss = nn.functional.cross_entropy(
             logits,
             characters,
             ignore_index=TOKEN_TO_INDEX[PAD],
             reduction="none",
-        ).mean(dim=1)
+        )
+        valid_tokens = (characters != TOKEN_TO_INDEX[PAD]).sum(dim=1).clamp_min(1)
+        text_error = (
+            token_loss.masked_fill(characters == TOKEN_TO_INDEX[PAD], 0.0).sum(dim=1)
+            / valid_tokens
+        )
         numeric_error = ((reconstructed_numeric - numeric) ** 2).mean(dim=1)
     return text_error.numpy(), numeric_error.numpy()
 
@@ -140,6 +151,31 @@ def combine_scores(
     """Combina CE lexical e MSE numérico em escalas comparáveis."""
     return (text_error - text_mean) / text_std + numeric_weight * (
         (numeric_error - numeric_mean) / numeric_std
+    )
+
+
+def mode_scores(
+    text_error: np.ndarray,
+    numeric_error: np.ndarray,
+    mode: str,
+    text_mean: float,
+    text_std: float,
+    numeric_mean: float,
+    numeric_std: float,
+    numeric_weight: float,
+) -> np.ndarray:
+    if mode == "lexical":
+        return (text_error - text_mean) / text_std
+    if mode == "semantic":
+        return (numeric_error - numeric_mean) / numeric_std
+    return combine_scores(
+        text_error,
+        numeric_error,
+        text_mean,
+        text_std,
+        numeric_mean,
+        numeric_std,
+        numeric_weight,
     )
 
 
@@ -188,6 +224,8 @@ def main() -> None:
                 "O checkpoint usa a arquitetura antiga; execute com --fresh "
                 "para treinar a arquitetura posicional atualizada."
             )
+        if checkpoint.get("mode", "hybrid") != args.mode:
+            raise ValueError("O checkpoint usa outro --mode; execute com --fresh.")
         checkpoint_numeric_dim = checkpoint.get("numeric_dim")
         if checkpoint_numeric_dim is None:
             checkpoint_numeric_dim = len(checkpoint.get("feature_columns", []))
@@ -233,10 +271,17 @@ def main() -> None:
             mask &= corrupted_characters != TOKEN_TO_INDEX["<PAD>"]
             corrupted_characters[mask] = TOKEN_TO_INDEX["<UNK>"]
             corrupted_numeric = numeric + torch.randn_like(numeric) * args.numeric_noise_std
-            logits, reconstructed = model(corrupted_characters, corrupted_numeric)
-            loss = text_loss(logits, characters) + args.numeric_weight * numeric_loss(
-                reconstructed, numeric
+            logits, reconstructed = model(
+                corrupted_characters, corrupted_numeric, mode=args.mode
             )
+            lexical_loss = text_loss(logits, characters)
+            semantic_loss = numeric_loss(reconstructed, numeric)
+            if args.mode == "lexical":
+                loss = lexical_loss
+            elif args.mode == "semantic":
+                loss = semantic_loss
+            else:
+                loss = lexical_loss + args.numeric_weight * semantic_loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -244,30 +289,42 @@ def main() -> None:
         model.eval()
         with torch.no_grad():
             validation_logits, validation_reconstructed = model(
-                validation_normal_characters, validation_normal_numeric
+                validation_normal_characters,
+                validation_normal_numeric,
+                mode=args.mode,
+            )
+            validation_lexical_loss = text_loss(
+                validation_logits, validation_normal_characters
+            )
+            validation_semantic_loss = numeric_loss(
+                validation_reconstructed, validation_normal_numeric
             )
             validation_loss = float(
-                text_loss(validation_logits, validation_normal_characters)
-                + args.numeric_weight
-                * numeric_loss(validation_reconstructed, validation_normal_numeric)
+                validation_lexical_loss
+                if args.mode == "lexical"
+                else validation_semantic_loss
+                if args.mode == "semantic"
+                else validation_lexical_loss
+                + args.numeric_weight * validation_semantic_loss
             )
         normal_text, normal_numeric = score_batch(
             model,
             validation_normal_characters,
             validation_normal_numeric,
-            args.numeric_weight,
+            args.mode,
         )
         all_text, all_numeric = score_batch(
-            model, validation_characters, validation_numeric, args.numeric_weight
+            model, validation_characters, validation_numeric, args.mode
         )
         text_mean = normal_text.mean()
         text_std = normal_text.std() + 1e-8
         numeric_mean = normal_numeric.mean()
         numeric_std = normal_numeric.std() + 1e-8
         validation_threshold = np.percentile(
-            combine_scores(
+            mode_scores(
                 normal_text,
                 normal_numeric,
+                args.mode,
                 text_mean,
                 text_std,
                 numeric_mean,
@@ -276,9 +333,10 @@ def main() -> None:
             ),
             99,
         )
-        validation_score = combine_scores(
+        validation_score = mode_scores(
             all_text,
             all_numeric,
+            args.mode,
             text_mean,
             text_std,
             numeric_mean,
@@ -297,6 +355,7 @@ def main() -> None:
                 "validation_char_error": float(normal_text.mean()),
                 "validation_numeric_error": float(normal_numeric.mean()),
                 "lambda": args.numeric_weight,
+                "mode": args.mode,
                 "validation_accuracy": float(
                     np.mean((validation_score > validation_threshold) == validation_labels)
                 ),
@@ -321,28 +380,30 @@ def main() -> None:
         best_optimizer_state = copy.deepcopy(optimizer.state_dict())
     model.eval()
     validation_text_normal, validation_numeric_normal = score_batch(
-        model, validation_normal_characters, validation_normal_numeric, args.numeric_weight
+        model, validation_normal_characters, validation_normal_numeric, args.mode
     )
     validation_text, validation_numeric_scores = score_batch(
-        model, validation_characters, validation_numeric, args.numeric_weight
+        model, validation_characters, validation_numeric, args.mode
     )
     test_text, test_numeric_scores = score_batch(
-        model, test_characters, test_numeric, args.numeric_weight
+        model, test_characters, test_numeric, args.mode
     )
     text_mean, text_std = validation_text_normal.mean(), validation_text_normal.std() + 1e-8
     numeric_mean, numeric_std = validation_numeric_normal.mean(), validation_numeric_normal.std() + 1e-8
-    validation_score = combine_scores(
+    validation_score = mode_scores(
         validation_text,
         validation_numeric_scores,
+        args.mode,
         text_mean,
         text_std,
         numeric_mean,
         numeric_std,
         args.numeric_weight,
     )
-    test_score = combine_scores(
+    test_score = mode_scores(
         test_text,
         test_numeric_scores,
+        args.mode,
         text_mean,
         text_std,
         numeric_mean,
@@ -350,9 +411,10 @@ def main() -> None:
         args.numeric_weight,
     )
     threshold = float(np.percentile(
-        combine_scores(
+        mode_scores(
             validation_text_normal,
             validation_numeric_normal,
+            args.mode,
             text_mean,
             text_std,
             numeric_mean,
@@ -373,7 +435,14 @@ def main() -> None:
         "test_scores": test_score.tolist(),
         "text_weight": 1.0,
         "numeric_weight": args.numeric_weight,
-        "score_formula": "z(char_cross_entropy) + lambda * z(numeric_mse)",
+        "mode": args.mode,
+        "score_formula": (
+            "z(char_cross_entropy)"
+            if args.mode == "lexical"
+            else "z(numeric_mse)"
+            if args.mode == "semantic"
+            else "z(char_cross_entropy) + lambda * z(numeric_mse)"
+        ),
         "validation_normal_char_mean": float(text_mean),
         "validation_normal_char_std": float(text_std),
         "validation_normal_numeric_mean": float(numeric_mean),
@@ -400,7 +469,14 @@ def main() -> None:
             "architecture": "positional-conv-v2",
             "weight_decay": args.weight_decay,
             "numeric_weight": args.numeric_weight,
-            "score_formula": "z(char_cross_entropy) + lambda * z(numeric_mse)",
+            "mode": args.mode,
+            "score_formula": (
+                "z(char_cross_entropy)"
+                if args.mode == "lexical"
+                else "z(numeric_mse)"
+                if args.mode == "semantic"
+                else "z(char_cross_entropy) + lambda * z(numeric_mse)"
+            ),
         },
         checkpoint_path,
     )
