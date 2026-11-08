@@ -15,10 +15,16 @@ import dns.message
 import dns.query
 import dns.rcode
 
+from external_domains import (
+    is_external_index,
+    load_external_domains,
+    pick_external_domain,
+)
+
 
 DNS_PORT = int(os.getenv("DNS_PORT", "53"))
-QUERY_COUNT = int(os.getenv("QUERY_COUNT", "30"))
-QUERY_INTERVAL = float(os.getenv("QUERY_INTERVAL", "0.2"))
+QUERY_COUNT = int(os.getenv("QUERY_COUNT", "10000"))
+QUERY_INTERVAL = float(os.getenv("QUERY_INTERVAL", "0.01"))
 LABELS_PATH = Path(os.getenv("LABELS_PATH", "/data/query_labels.csv"))
 DASHBOARD_PATH = Path(
     os.getenv("DASHBOARD_PATH", "/data/dashboard/traffic_summary.json")
@@ -26,6 +32,10 @@ DASHBOARD_PATH = Path(
 SEED = int(os.getenv("SEED", "42"))
 RANDOM = random.Random(SEED)
 ANOMALY_RATE = float(os.getenv("ANOMALY_RATE", "0.5"))
+# Ranking local opcional (rank,domain); sem o arquivo o perfil normal_tranco fica desligado.
+TRANCO_PATH = Path(os.getenv("TRANCO_PATH", "/external/tranco_top.csv"))
+TRANCO_LIMIT = int(os.getenv("TRANCO_LIMIT", "2000"))
+TRANCO_RATE = float(os.getenv("TRANCO_RATE", "0.15"))
 
 # Tipos de consulta ponderados: normais lembram tráfego real (A/AAAA dominam),
 # anomalias concentram-se em TXT/CNAME como em túneis DNS.
@@ -262,6 +272,12 @@ def reverse_name(index: int) -> tuple[str, str, str, str]:
     return f"{host}.0.30.172.in-addr.arpa", "normal", "rede", "normal_reverse"
 
 
+def external_name(domains: list[str], index: int) -> tuple[str, str, str, str]:
+    """Usa um nome do ranking local como texto de uma consulta normal `.test`."""
+    domain = pick_external_domain(domains, SEED, index)
+    return f"{domain}.test", "normal", "tranco", "normal_tranco"
+
+
 def anomalous_domain(index: int) -> tuple[str, str, str, str]:
     """Gera somente famílias sintéticas para avaliação defensiva."""
     family = ("base32", "hex", "base64", "low_entropy", "mixed")[index % 5]
@@ -346,6 +362,14 @@ def write_summary(
 def main() -> None:
     LABELS_PATH.parent.mkdir(parents=True, exist_ok=True)
     targets = parse_targets()
+    external_domains = load_external_domains(TRANCO_PATH, TRANCO_LIMIT)
+    if external_domains:
+        print(
+            f"tranco_dominios={len(external_domains)} tranco_taxa={TRANCO_RATE}",
+            flush=True,
+        )
+    elif TRANCO_PATH.is_file():
+        print(f"tranco_aviso=sem dominios validos em {TRANCO_PATH}", flush=True)
     labels = Counter()
     family_counts = Counter()
     domains_by_family: defaultdict[str, set[str]] = defaultdict(set)
@@ -380,6 +404,12 @@ def main() -> None:
                 )[0]
                 if query_type == "PTR":
                     domain, family, service, profile = reverse_name(index)
+                elif external_domains and is_external_index(
+                    SEED, index, TRANCO_RATE
+                ):
+                    domain, family, service, profile = external_name(
+                        external_domains, index
+                    )
                 else:
                     domain, family, service, profile = normal_domain(index)
             else:

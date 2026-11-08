@@ -67,7 +67,7 @@ services:
       SERVICE_HOST: fake-services
       SERVICE_PORT: "8081"
       REQUEST_INTERVAL: "0.5"
-      TRAFFIC_SEED: "42"
+      TRAFFIC_SEED: "${SEED:-42}"
     networks:
       unlimited-void-net:
         ipv4_address: 172.30.0.7
@@ -98,13 +98,17 @@ services:
     environment:
       DNS_TARGETS: "resolver:70,dnsmasq:20,bind9:10"
       DNS_PORT: "53"
-      QUERY_COUNT: "10000"
-      QUERY_INTERVAL: "0.01"
-      SEED: "42"
-      ANOMALY_RATE: "0.5"
+      QUERY_COUNT: "${QUERY_COUNT:-10000}"
+      QUERY_INTERVAL: "${QUERY_INTERVAL:-0.01}"
+      SEED: "${SEED:-42}"
+      ANOMALY_RATE: "${ANOMALY_RATE:-0.5}"
+      TRANCO_PATH: "${TRANCO_PATH:-/external/tranco_top.csv}"
+      TRANCO_LIMIT: "${TRANCO_LIMIT:-2000}"
+      TRANCO_RATE: "${TRANCO_RATE:-0.15}"
       DASHBOARD_PATH: /data/dashboard/traffic_summary.json
     volumes:
       - ./data/raw:/data
+      - ./data/external:/external:ro
 
 networks:
   unlimited-void-net:
