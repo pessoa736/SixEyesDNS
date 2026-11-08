@@ -1,5 +1,8 @@
 # Dependências instaladas via pip durante a criação do ambiente Conda.
-# Em máquinas com GPU, substitua torch pela variante recomendada pelo NPAD.
+# O torch do PyPI é a build CUDA (NVIDIA, como no NPAD) e cai para CPU em GPUs
+# AMD. Para a RX 6600 XT use a build ROCm (veja README, seção Treino em GPU):
+#   pip install torch --index-url https://download.pytorch.org/whl/rocm7.2
+# Se o NPAD recomendar outra versão de CUDA, instale a variante dele no lugar.
 # dnspython é usado apenas dentro do container do gerador.
 torch==2.15.0
 pytest==9.2.0

@@ -111,6 +111,27 @@ VENV_PYTHON="$ENV_DIR/bin/python"
 
 "$VENV_PYTHON" -m pip install --upgrade pip
 
+install_torch() {
+    case "$GPU" in
+        amd)
+            local rocm_version="${ROCM_VERSION:-}"
+            if [[ -z "$rocm_version" && -r /opt/rocm/.info/version ]]; then
+                rocm_version="$(cut -d. -f1,2 /opt/rocm/.info/version)"
+            fi
+            rocm_version="${rocm_version:-7.2}"
+            echo "Instalando PyTorch ROCm $rocm_version (o torch do PyPI é CUDA e não usa GPU AMD)..."
+            "$VENV_PYTHON" -m pip install torch \
+                --index-url "https://download.pytorch.org/whl/rocm${rocm_version}"
+            ;;
+        nvidia)
+            "$VENV_PYTHON" -m pip install torch
+            ;;
+        *)
+            "$VENV_PYTHON" -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+            ;;
+    esac
+}
+
 if [[ "$GPU" == "amd" ]]; then
     "$VENV_PYTHON" -m pip install tf-keras --no-deps
     "$VENV_PYTHON" -m pip install \
@@ -119,7 +140,8 @@ else
     "$VENV_PYTHON" -m pip install "$TENSORFLOW_PACKAGE"
 fi
 
-"$VENV_PYTHON" -m pip install torch numpy pandas matplotlib jupyter notebook scikit-learn opencv-python
+install_torch
+"$VENV_PYTHON" -m pip install numpy pandas matplotlib jupyter notebook scikit-learn opencv-python
 
 echo "Ambiente $ENV_DIR criado com sucesso."
 echo "Ative-o com: source $ENV_DIR/bin/activate"

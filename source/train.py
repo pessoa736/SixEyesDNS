@@ -20,27 +20,47 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 if __package__:
+    from .device import describe_device, resolve_device
     from .features import (
         FEATURE_COLUMNS,
         MAX_LENGTH,
         PAD,
         TOKEN_TO_INDEX,
         VOCABULARY,
-        encode_domain,
         transform_features,
     )
-    from .models import CharAutoencoder, HybridAutoencoder
+    from .models import ARCHITECTURES, LOSS_DESCRIPTIONS, build_model
+    from .scoring import (
+        anomaly_labels,
+        confusion_matrix,
+        encode_domains,
+        mode_scores,
+        normal_rows,
+        numeric_tensor,
+        read_rows,
+        score_batch,
+    )
 else:
+    from device import describe_device, resolve_device
     from features import (
         FEATURE_COLUMNS,
         MAX_LENGTH,
         PAD,
         TOKEN_TO_INDEX,
         VOCABULARY,
-        encode_domain,
         transform_features,
     )
-    from models import CharAutoencoder, HybridAutoencoder
+    from models import ARCHITECTURES, LOSS_DESCRIPTIONS, build_model
+    from scoring import (
+        anomaly_labels,
+        confusion_matrix,
+        encode_domains,
+        mode_scores,
+        normal_rows,
+        numeric_tensor,
+        read_rows,
+        score_batch,
+    )
 
 
 EARLY_STOP_PATIENCE = 200
@@ -108,7 +128,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         default="auto",
-        help="Dispositivo de treino: 'auto' (padrão), 'cpu', 'cuda' ou 'cuda:N'",
+        help="Dispositivo de treino: 'auto' (padrão; GPU NVIDIA/AMD com mais "
+        "memória livre ou CPU), 'cpu', 'cuda' (exige GPU) ou 'cuda:N'",
     )
     parser.add_argument("--fresh", action="store_true")
     parser.add_argument(
@@ -129,22 +150,6 @@ def set_seed(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-def resolve_device(name: str) -> torch.device:
-    """Resolve 'auto', 'cpu', 'cuda' ou 'cuda:N' para um dispositivo válido."""
-    if name == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device(name)
-    if device.type == "cuda":
-        if not torch.cuda.is_available():
-            raise ValueError(f"Dispositivo '{name}' indisponível: CUDA não detectada")
-        if device.index is not None and device.index >= torch.cuda.device_count():
-            raise ValueError(
-                f"Dispositivo '{name}' indisponível: "
-                f"{torch.cuda.device_count()} GPU(s) visível(eis)"
-            )
-    return device
 
 
 class LiveTrainingPlot:
@@ -175,9 +180,11 @@ class LiveTrainingPlot:
         validation_loss = [item["validation_loss"] for item in history]
         accuracy = [item["validation_accuracy"] for item in history]
         self.loss_axis.clear()
+        loss_name = LOSS_DESCRIPTIONS.get(history[-1].get("mode", "hybrid"), "perda")
         self.loss_axis.plot(epochs, train_loss, label="Treino")
         self.loss_axis.plot(epochs, validation_loss, label="Validação normal")
-        self.loss_axis.set_title("Perda de reconstrução")
+        self.loss_axis.set_title(f"Perda de reconstrução ({loss_name})")
+        self.loss_axis.set_ylabel(loss_name)
         self.loss_axis.set_xlabel("Época")
         self.loss_axis.grid(alpha=0.25)
         self.loss_axis.legend()
@@ -220,6 +227,7 @@ def save_training_gif(history: list[dict[str, float]], output_dir: Path) -> Path
 
     figure, (loss_axis, accuracy_axis) = plt.subplots(1, 2, figsize=(11, 4))
     figure.suptitle("Evolução do treinamento")
+    loss_name = LOSS_DESCRIPTIONS.get(history[-1].get("mode", "hybrid"), "perda")
 
     def draw(frame: int) -> None:
         end = int(frame_indices[frame])
@@ -228,7 +236,8 @@ def save_training_gif(history: list[dict[str, float]], output_dir: Path) -> Path
         loss_axis.plot(
             epochs[:end], validation_loss[:end], label="Validação normal"
         )
-        loss_axis.set_title("Perda de reconstrução")
+        loss_axis.set_title(f"Perda de reconstrução ({loss_name})")
+        loss_axis.set_ylabel(loss_name)
         loss_axis.set_xlabel("Época")
         loss_axis.set_xlim(epochs[0], epochs[-1])
         loss_axis.set_ylim(0, max(train_loss) * 1.05)
@@ -263,107 +272,6 @@ def save_training_gif(history: list[dict[str, float]], output_dir: Path) -> Path
         plt.close(figure)
 
 
-def confusion_matrix(labels: np.ndarray, predictions: np.ndarray) -> list[list[int]]:
-    """Monta [[VN, FP], [FN, VP]] para a classe positiva 'suspeita'."""
-    true_negative = int(np.sum((labels == 0) & (predictions == 0)))
-    false_positive = int(np.sum((labels == 0) & (predictions == 1)))
-    false_negative = int(np.sum((labels == 1) & (predictions == 0)))
-    true_positive = int(np.sum((labels == 1) & (predictions == 1)))
-    return [[true_negative, false_positive], [false_negative, true_positive]]
-
-
-def read_rows(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8") as file:
-        rows = list(csv.DictReader(file))
-    if not rows:
-        raise ValueError(f"Split vazio: {path}")
-    return rows
-
-
-def encode_domains(rows: list[dict[str, str]]) -> torch.Tensor:
-    encoded = np.stack([encode_domain(row["query"]) for row in rows])
-    return torch.from_numpy(encoded)
-
-
-def normal_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    selected = [row for row in rows if row.get("label") == "normal"]
-    if not selected:
-        raise ValueError("O split precisa conter exemplos normais")
-    return selected
-
-
-def numeric_tensor(rows: list[dict[str, str]], scaler: StandardScaler) -> torch.Tensor:
-    return torch.from_numpy(scaler.transform(transform_features(rows)).astype(np.float32))
-
-
-def score_batch(
-    model: nn.Module,
-    characters: torch.Tensor,
-    numeric: torch.Tensor,
-    mode: str,
-) -> tuple[np.ndarray, np.ndarray]:
-    with torch.no_grad():
-        logits, reconstructed_numeric = model(characters, numeric, mode=mode)
-        token_loss = nn.functional.cross_entropy(
-            logits,
-            characters,
-            ignore_index=TOKEN_TO_INDEX[PAD],
-            reduction="none",
-        )
-        valid_tokens = (characters != TOKEN_TO_INDEX[PAD]).sum(dim=1).clamp_min(1)
-        text_error = (
-            token_loss.masked_fill(characters == TOKEN_TO_INDEX[PAD], 0.0).sum(dim=1)
-            / valid_tokens
-        )
-        if reconstructed_numeric.shape[1] == 0:
-            numeric_error = np.zeros(characters.shape[0], dtype=np.float32)
-        else:
-            numeric_error = (
-                ((reconstructed_numeric - numeric) ** 2).mean(dim=1).cpu().numpy()
-            )
-    return text_error.cpu().numpy(), numeric_error
-
-
-def combine_scores(
-    text_error: np.ndarray,
-    numeric_error: np.ndarray,
-    text_mean: float,
-    text_std: float,
-    numeric_mean: float,
-    numeric_std: float,
-    numeric_weight: float,
-) -> np.ndarray:
-    """Combina CE lexical e MSE numérico em escalas comparáveis."""
-    return (text_error - text_mean) / text_std + numeric_weight * (
-        (numeric_error - numeric_mean) / numeric_std
-    )
-
-
-def mode_scores(
-    text_error: np.ndarray,
-    numeric_error: np.ndarray,
-    mode: str,
-    text_mean: float,
-    text_std: float,
-    numeric_mean: float,
-    numeric_std: float,
-    numeric_weight: float,
-) -> np.ndarray:
-    if mode == "lexical":
-        return (text_error - text_mean) / text_std
-    if mode == "semantic":
-        return (numeric_error - numeric_mean) / numeric_std
-    return combine_scores(
-        text_error,
-        numeric_error,
-        text_mean,
-        text_std,
-        numeric_mean,
-        numeric_std,
-        numeric_weight,
-    )
-
-
 def character_loss(
     logits: torch.Tensor, targets: torch.Tensor, pad_weight: float
 ) -> torch.Tensor:
@@ -389,12 +297,9 @@ def main() -> None:
         or args.pad_loss_weight < 0
     ):
         raise ValueError("Parâmetros de treino inválidos")
-    set_seed(args.seed)
     device = resolve_device(args.device)
-    if device.type == "cuda":
-        print(f"Dispositivo: {device} ({torch.cuda.get_device_name(device)})")
-    else:
-        print("Dispositivo: CPU")
+    set_seed(args.seed)
+    print(f"Dispositivo selecionado: {describe_device(device, args.device)}")
     train = read_rows(args.splits_dir / "train.csv")
     validation = read_rows(args.splits_dir / "validation.csv")
     test = read_rows(args.splits_dir / "test.csv")
@@ -409,24 +314,17 @@ def main() -> None:
     validation_characters = encode_domains(validation)
     test_numeric = numeric_tensor(test, scaler)
     test_characters = encode_domains(test)
-    if args.mode == "lexical":
-        model: nn.Module = CharAutoencoder(
-            len(VOCABULARY), MAX_LENGTH, args.latent_dim
-        )
-    else:
-        model = HybridAutoencoder(
-            len(FEATURE_COLUMNS), len(VOCABULARY), MAX_LENGTH, args.latent_dim
-        )
-        if args.lexical_checkpoint:
-            lexical_checkpoint = torch.load(
-                args.lexical_checkpoint, map_location="cpu"
-            )
-            lexical_state = {
-                key: value
-                for key, value in lexical_checkpoint["model_state"].items()
-                if key.startswith(("embedding.", "char_encoder."))
-            }
-            model.load_state_dict(lexical_state, strict=False)
+    model = build_model(
+        args.mode, len(FEATURE_COLUMNS), len(VOCABULARY), MAX_LENGTH, args.latent_dim
+    )
+    if args.mode == "hybrid" and args.lexical_checkpoint:
+        lexical_checkpoint = torch.load(args.lexical_checkpoint, map_location="cpu")
+        lexical_state = {
+            key: value
+            for key, value in lexical_checkpoint["model_state"].items()
+            if key.startswith(("embedding.", "char_encoder."))
+        }
+        model.load_state_dict(lexical_state, strict=False)
     model.to(device)
     validation_normal_numeric = validation_normal_numeric.to(device)
     validation_normal_characters = validation_normal_characters.to(device)
@@ -445,15 +343,11 @@ def main() -> None:
     best_optimizer_state = None
     if checkpoint_path.is_file() and not args.fresh:
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        expected_architecture = (
-            "char-autoencoder-v1"
-            if args.mode == "lexical"
-            else "positional-conv-v2"
-        )
+        expected_architecture = ARCHITECTURES[args.mode]
         if checkpoint.get("architecture") != expected_architecture:
             raise ValueError(
                 "O checkpoint usa a arquitetura antiga; execute com --fresh "
-                "para treinar a arquitetura posicional atualizada."
+                "para treinar a arquitetura atualizada."
             )
         if checkpoint.get("mode", "hybrid") != args.mode:
             raise ValueError("O checkpoint usa outro --mode; execute com --fresh.")
@@ -483,6 +377,8 @@ def main() -> None:
             start_epoch = int(history[-1]["epoch"]) + 1
         print(f"Modelo encontrado. Retomando na época {start_epoch}.")
 
+    validation_labels = anomaly_labels(validation)
+    test_labels = anomaly_labels(test)
     loader = DataLoader(
         TensorDataset(train_characters, train_numeric),
         batch_size=args.batch_size,
@@ -512,8 +408,10 @@ def main() -> None:
             logits, reconstructed = model(
                 corrupted_characters, corrupted_numeric, mode=args.mode
             )
-            lexical_loss = character_loss(
-                logits, characters, args.pad_loss_weight
+            lexical_loss = (
+                character_loss(logits, characters, args.pad_loss_weight)
+                if args.mode != "semantic"
+                else torch.zeros((), device=characters.device)
             )
             semantic_loss = (
                 numeric_loss(reconstructed, numeric)
@@ -537,10 +435,14 @@ def main() -> None:
                 validation_normal_numeric,
                 mode=args.mode,
             )
-            validation_lexical_loss = character_loss(
-                validation_logits,
-                validation_normal_characters,
-                args.pad_loss_weight,
+            validation_lexical_loss = (
+                character_loss(
+                    validation_logits,
+                    validation_normal_characters,
+                    args.pad_loss_weight,
+                )
+                if args.mode != "semantic"
+                else torch.zeros((), device=validation_normal_characters.device)
             )
             validation_semantic_loss = (
                 numeric_loss(validation_reconstructed, validation_normal_numeric)
@@ -590,9 +492,6 @@ def main() -> None:
             numeric_mean,
             numeric_std,
             args.numeric_weight,
-        )
-        validation_labels = np.asarray(
-            [row["label"] != "normal" for row in validation], dtype=int
         )
         epoch = start_epoch + offset
         history.append(
@@ -690,10 +589,6 @@ def main() -> None:
         ),
         99,
     ))
-    validation_labels = np.asarray(
-        [row["label"] != "normal" for row in validation], dtype=int
-    )
-    test_labels = np.asarray([row["label"] != "normal" for row in test], dtype=int)
     validation_predictions = (validation_score > threshold).astype(int)
     test_predictions = (test_score > threshold).astype(int)
     metrics = {
@@ -741,11 +636,7 @@ def main() -> None:
             "numeric_std": float(numeric_std),
             "feature_columns": list(FEATURE_COLUMNS),
             "numeric_dim": len(FEATURE_COLUMNS),
-            "architecture": (
-                "char-autoencoder-v1"
-                if args.mode == "lexical"
-                else "positional-conv-v2"
-            ),
+            "architecture": ARCHITECTURES[args.mode],
             "weight_decay": args.weight_decay,
             "pad_loss_weight": args.pad_loss_weight,
             "numeric_weight": args.numeric_weight,

@@ -1,9 +1,72 @@
-"""Modelo que reconstrói caracteres e atributos lexicais."""
+"""Autoencoders lexical, semântico (denso) e híbrido."""
 
 from __future__ import annotations
 
 import torch
 from torch import nn
+
+
+ARCHITECTURES = {
+    "lexical": "char-autoencoder-v1",
+    "semantic": "dense-autoencoder-v1",
+    "hybrid": "positional-conv-v2",
+}
+LOSS_DESCRIPTIONS = {
+    "lexical": "CE dos caracteres",
+    "semantic": "MSE dos atributos",
+    "hybrid": "CE + λ·MSE",
+}
+
+
+class DenseAE(nn.Module):
+    """Autoencoder denso dos atributos numéricos; o score é o MSE por exemplo."""
+
+    def __init__(
+        self,
+        numeric_dim: int = 42,
+        latent_dim: int = 16,
+        vocabulary_size: int = 41,
+    ) -> None:
+        super().__init__()
+        self.vocabulary_size = vocabulary_size
+        self.encoder = nn.Sequential(
+            nn.Linear(numeric_dim, 32),
+            nn.ReLU(),
+            nn.Dropout(0.10),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Dropout(0.10),
+            nn.Linear(16, latent_dim),
+            nn.Tanh(),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 16),
+            nn.ReLU(),
+            nn.Dropout(0.10),
+            nn.Linear(16, 32),
+            nn.ReLU(),
+            nn.Linear(32, numeric_dim),
+        )
+
+    def encode(
+        self,
+        characters: torch.Tensor,
+        numeric: torch.Tensor,
+        mode: str = "semantic",
+    ) -> torch.Tensor:
+        """Projeta os atributos no espaço latente; os caracteres são ignorados."""
+        return self.encoder(numeric)
+
+    def forward(
+        self,
+        characters: torch.Tensor,
+        numeric: torch.Tensor,
+        mode: str = "semantic",
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        no_logits = torch.empty(
+            (characters.shape[0], self.vocabulary_size, 0), device=characters.device
+        )
+        return no_logits, self.decoder(self.encode(characters, numeric))
 
 
 class CharAutoencoder(nn.Module):
@@ -160,3 +223,20 @@ class HybridAutoencoder(nn.Module):
         numeric_output = self.numeric_decoder(latent)
         char_logits = self.char_decoder(latent)
         return char_logits, numeric_output
+
+
+def build_model(
+    mode: str,
+    numeric_dim: int = 42,
+    vocabulary_size: int = 41,
+    max_length: int = 64,
+    latent_dim: int = 16,
+) -> nn.Module:
+    """Cria o autoencoder do modo pedido com a arquitetura registrada."""
+    if mode == "lexical":
+        return CharAutoencoder(vocabulary_size, max_length, latent_dim)
+    if mode == "semantic":
+        return DenseAE(numeric_dim, latent_dim, vocabulary_size)
+    if mode == "hybrid":
+        return HybridAutoencoder(numeric_dim, vocabulary_size, max_length, latent_dim)
+    raise ValueError(f"Modo de autoencoder inválido: {mode}")
