@@ -61,16 +61,25 @@ Status: implementada; modelos retreinados sem os indicadores de tipo DNS.
 
 ## Fase 2 — Dados
 
-Status: laboratório e dataset sintético implementados; saneamento pendente.
+Status: laboratório, dataset sintético e alinhamento logs-rótulos
+implementados; a regeneração do dataset versionado depende de decisão.
 
-- [ ] Corrigir o alinhamento entre logs e rótulos e documentar o tratamento de
-      execuções concatenadas e duplicatas.
-- [ ] Alinhar README, compose e scripts quanto a `QUERY_COUNT`,
+- [x] Corrigir o alinhamento entre logs e rótulos e documentar o tratamento de
+      execuções concatenadas e duplicatas (`source/process_raw.py`: casa por
+      servidor-alvo, IP do gerador, janela de tempo e `(query, tipo)`; falha em
+      rótulos concatenados ou conflitantes; relatório em `alignment.json`).
+- [x] Alinhar README, compose e scripts quanto a `QUERY_COUNT`,
       `ANOMALY_RATE` e `SEED`.
 - [ ] Decidir se o dataset versionado será regenerado; se sim, fazer isso em
-      commit separado.
-- [ ] Adicionar fonte opcional local `data/external/tranco_top.csv`, ignorada
-      pelo Git, com fallback interno.
+      commit separado. **Decisão do autor:** o alinhamento novo gera 10.000
+      linhas em vez de 9.911 (as 89 que faltam são normais), mas os splits com
+      seed 42 mudam, o que invalida os checkpoints atuais e a release
+      `hybrid-v1`; regenerar exige retreinar os três modelos (viável com a
+      GPU) e reavaliar.
+- [x] Adicionar fonte opcional local `data/external/tranco_top.csv`, ignorada
+      pelo Git, com fallback interno (`docker/generator/external_domains.py`;
+      sem o arquivo a saída do gerador é idêntica à anterior; o download é
+      manual e a fonte deve ser citada).
 - [x] Adicionar normais difíceis com subdomínios semelhantes a hashes de CDN.
 - [x] Adicionar anomalias de baixa entropia, labels curtos e codificações mistas.
 - [x] Registrar sequência, timestamp UTC, serviço e perfil no arquivo de
@@ -83,21 +92,24 @@ Status: laboratório e dataset sintético implementados; saneamento pendente.
 - [x] Distribuir as consultas do gerador por múltiplos servidores DNS com
       pesos (`DNS_TARGETS`), tipos ponderados por classe, reversas PTR e
       jitter determinístico.
-- [x] Ler logs do dnsmasq e do BIND9 no `process_raw.py` (múltiplos `--log`).
+- [x] Ler logs do dnsmasq, do BIND9 e do Unbound no `process_raw.py`
+      (múltiplos `--log`).
 - [x] Ampliar o dashboard com consultas por servidor, por tipo, por minuto,
       falhas DNS e tabela de infraestrutura.
 
 ## Fase 3 — Modelos, treino e avaliação
 
-Status: treino lexical, semântico e híbrido implementado; avaliação final
-pendente.
+Status: treino lexical, semântico (DenseAE) e híbrido, baselines e avaliação
+completa implementados; faltam a regeneração do dataset (decisão do autor) e a
+diversificação dos normais difíceis.
 
-- [ ] Implementar `DenseAE` para 42 atributos e score MSE.
+- [x] Implementar `DenseAE` para 42 atributos e score MSE (modo `semantic`).
 - [x] Implementar submodelo lexical independente com tokens, convoluções e
       reconstrução de caracteres.
 - [x] Implementar `HybridAutoencoder` com score combinado CE/MSE.
-- [x] Implementar `source/train.py` com seed 42, CPU, Adam e treino somente
-      com exemplos normais.
+- [x] Implementar `source/train.py` com seed 42, Adam e treino somente com
+      exemplos normais; CPU como caminho de referência e GPU opcional
+      (`--device auto`: NVIDIA/CUDA ou AMD/ROCm, com fallback para CPU).
 - [x] Permitir os modos `lexical`, `semantic` e `hybrid` por CLI.
 - [x] Permitir inicializar o encoder híbrido com o checkpoint lexical
       pré-treinado.
@@ -109,36 +121,42 @@ pendente.
       plot híbrido/semântico para mostrar erro numérico.
 - [x] Organizar os scripts em `data/`, `model/`, `evaluate/`, `test/`, `lab/`
       e `env/`.
-- [ ] Implementar `source/scoring.py` com limiar P99 e melhor F1 calibrados
+- [x] Implementar `source/scoring.py` com limiar P99 e melhor F1 calibrados
       somente na validação.
-- [ ] Implementar baselines de entropia e Isolation Forest.
-- [ ] Implementar `source/evaluate.py` com métricas, figuras, prevalência,
+- [x] Implementar baselines de entropia e Isolation Forest
+      (`source/baselines.py`).
+- [x] Implementar `source/evaluate.py` com métricas, figuras, prevalência,
       recall a FPR de 1% e recall por família.
-- [ ] Reportar precisão, recall, F1, FPR e ROC-AUC além da acurácia, com
-      curvas ROC e precisão-recall.
-- [ ] Reportar métricas por registro e por domínio único; investigar os
-      falsos positivos por domínio (lexical: 161 registros/10 domínios;
-      híbrido: 93/6 no teste atual).
-- [ ] Avaliar leave-one-family-out sem escolher limiar no teste.
-- [ ] Adicionar explicabilidade por atributo e por caractere.
-- [ ] Testar shapes, parâmetros, treino de uma época e avaliação em dataset
+- [x] Reportar precisão, recall, F1, FPR e ROC-AUC além da acurácia, com
+      curvas ROC e precisão-recall (`results/evaluation/`).
+- [x] Reportar métricas por registro e por domínio único; investigar os
+      falsos positivos por domínio (híbrido no teste atual: 7 domínios
+      `normal_hard` parecidos com hashes de CDN no limiar P99).
+- [x] Avaliar leave-one-family-out sem escolher limiar no teste.
+- [x] Adicionar explicabilidade por atributo e por caractere
+      (`source/explain.py`).
+- [x] Testar shapes, parâmetros, treino de uma época e avaliação em dataset
       mínimo.
-- [ ] Gerar tabela de ablação em `results/`.
-- [ ] Corrigir os rótulos das perdas nos gráficos: CE no lexical, MSE no
+- [x] Gerar tabela de ablação em `results/` (`results/evaluation/ablation.md`).
+- [x] Corrigir os rótulos das perdas nos gráficos: CE no lexical, MSE no
       semântico e perda combinada no híbrido.
-- [ ] Exibir matrizes de confusão com contagens e percentuais por classe,
+- [x] Exibir matrizes de confusão com contagens e percentuais por classe,
       com texto legível sobre células escuras.
-- [ ] Adicionar zoom próximo ao limiar nas distribuições de score, com eixo
+- [x] Adicionar zoom próximo ao limiar nas distribuições de score, com eixo
       comum entre validação e teste e contagem dos pontos fora do recorte.
-- [ ] Verificar a correspondência entre scores salvos e rótulos do split
+- [x] Verificar a correspondência entre scores salvos e rótulos do split
       (ordem e quantidade) antes de plotar as distribuições.
-- [ ] Marcar a melhor época (checkpoint) nos gráficos de perda e adicionar
+- [x] Marcar a melhor época (checkpoint) nos gráficos de perda e adicionar
       zoom do trecho final do treinamento.
-- [ ] Reorganizar `test-samples.png`: menos exemplos por figura, escala de
+- [x] Reorganizar `test-samples.png`: menos exemplos por figura, escala de
       cores comum, erro por caractere e numérico no híbrido e sem
       reconstrução textual no modo semântico.
 - [ ] Diversificar os perfis normais difíceis e avaliar famílias não vistas
-      para reduzir o FPR do lexical/híbrido no teste.
+      para reduzir o FPR do lexical/híbrido no teste. Parcial: o
+      leave-one-family-out já avalia famílias omitidas da calibração e o
+      gerador ganhou normais temáticos e a fonte Tranco opcional; reduzir o FPR
+      do híbrido (7 domínios `normal_hard` no teste) exige regenerar o dataset
+      e retreinar, o que depende da decisão da Fase 2.
 
 ## Fase 4 — Demonstração
 
@@ -189,16 +207,18 @@ Status: documentação inicial concluída; consolidação final pendente.
 
 ## Critérios de aceitação
 
-- [ ] `./scripts/data/process-data.sh` roda do zero e falha em caso de
-      interseção.
-- [ ] `python -m source.train --mode lexical|semantic|hybrid` roda em CPU em
-      poucos minutos com o dataset versionado.
-- [ ] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
+- [x] `./scripts/data/process-data.sh` roda do zero e falha em caso de
+      interseção (verificado com os logs reais, saída fora de `data/processed/`;
+      `split_dataset` verifica a interseção em tempo de execução).
+- [x] `python -m source.train --mode lexical|semantic|hybrid` roda em CPU em
+      poucos minutos com o dataset versionado (100 épocas do híbrido: 121 s).
+- [x] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
       versionado.
-- [ ] `pytest` passa.
-- [ ] Nenhuma feature usa `label`, `family`, `query_type`, `seed`, IP ou
+- [x] `pytest` passa.
+- [x] Nenhuma feature usa `label`, `family`, `query_type`, `seed`, IP ou
       cliente.
-- [ ] O README não contém métricas inventadas.
+- [x] O README não contém métricas inventadas (as tabelas de resultados foram
+      conferidas célula a célula contra `results/evaluation/metrics.csv`).
 - [ ] O texto cobre introdução, técnicas, resultados, análise crítica e
       conclusões.
 - [ ] A demo funciona ao vivo ou em replay offline.
