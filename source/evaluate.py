@@ -32,12 +32,14 @@ if __package__:
         explain_row,
         position_curves,
     )
+    from .plot_training import draw_confusion_matrix
     from .scoring import (
         LoadedModel,
         anomaly_labels,
         best_f1_threshold,
         classification_metrics,
         collapse_by_domain,
+        confusion_matrix,
         expected_precision,
         load_checkpoint,
         normal_rows,
@@ -48,12 +50,14 @@ if __package__:
 else:
     from baselines import IsolationForestBaseline, entropy_scores
     from explain import attribute_table, character_table, explain_row, position_curves
+    from plot_training import draw_confusion_matrix
     from scoring import (
         LoadedModel,
         anomaly_labels,
         best_f1_threshold,
         classification_metrics,
         collapse_by_domain,
+        confusion_matrix,
         expected_precision,
         load_checkpoint,
         normal_rows,
@@ -786,6 +790,36 @@ def plot_grouped_bars(
     savefig(figure, path)
 
 
+def plot_confusion_matrices(
+    systems: list[System],
+    test: Split,
+    thresholds: dict[str, dict[str, float]],
+    output_dir: Path,
+) -> None:
+    """Matrizes de confusão do teste, por sistema e por política de limiar."""
+    figure, axes = plt.subplots(
+        len(POLICIES),
+        len(systems),
+        figsize=(5.0 * len(systems), 4.6 * len(POLICIES)),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    image = None
+    for column, system in enumerate(systems):
+        for row, policy in enumerate(POLICIES):
+            predictions = (system.scores["test"] > thresholds[system.key][policy]).astype(int)
+            image = draw_confusion_matrix(
+                axes[row, column],
+                confusion_matrix(test.labels, predictions),
+                f"{system.label}\n{POLICY_LABELS[policy]}",
+            )
+    figure.colorbar(image, ax=axes.ravel().tolist(), fraction=0.02, pad=0.02,
+                    label="Percentual da classe real")
+    figure.suptitle("Matrizes de confusão no teste (limiares calibrados na validação)")
+    figure.savefig(output_dir / "confusion-matrices.png", dpi=150, bbox_inches="tight")
+    plt.close(figure)
+
+
 def plot_prevalence(rows: list[dict[str, object]], output_dir: Path) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
     for axis, policy in zip(axes, POLICIES):
@@ -1019,6 +1053,7 @@ def run(
     if plots:
         keys = [system.key for system in systems]
         plot_curves(systems, splits["test"], thresholds, output_dir)
+        plot_confusion_matrices(systems, splits["test"], thresholds, output_dir)
         plot_prevalence(prevalence, output_dir)
         plot_grouped_bars(
             output_dir / "recall-by-family.png",

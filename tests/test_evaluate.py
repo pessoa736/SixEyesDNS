@@ -40,7 +40,7 @@ def test_outputs_are_written(evaluation: tuple[dict[str, object], Path]) -> None
         "recall_by_family.csv", "fpr_by_profile.csv", "false_positives.csv",
         "prevalence.csv", "lofo.csv", "leakage.csv", "explain_attributes.csv",
         "explain_characters.csv", "explain_examples.md", "roc-pr.png", "prevalence.png",
-        "recall-by-family.png", "fpr-by-profile.png", "lofo.png",
+        "recall-by-family.png", "fpr-by-profile.png", "lofo.png", "confusion-matrices.png",
         "explain-attributes.png", "explain-characters.png",
     }
     assert expected <= {path.name for path in output.iterdir()}
