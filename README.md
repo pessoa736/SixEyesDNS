@@ -168,10 +168,10 @@ Em todos os modos, o treino continua usando apenas exemplos normais.
 O decoder de caracteres produz uma matriz fixa de 64 posições porque os
 domínios são preenchidos ou cortados para `MAX_LENGTH`. Ele não está tentando
 acrescentar caracteres ao domínio real: está reconstruindo uma sequência
-acolchoada. Nas posições `PAD`, a perda de treinamento é ignorada, então essas
-posições não recebem um sinal forte para serem previstas como `PAD`; por isso a
-saída pode parecer preencher todo o espaço. A visualização encerra a saída ao
-primeiro `PAD`, e o score lexical considera somente posições reais.
+acolchoada. Para evitar que a saída pareça preenchida, o treino aplica uma
+perda reduzida (`--pad-loss-weight`, padrão `0.2`) nas posições `PAD`; assim o
+modelo aprende a encerrar a sequência sem deixar o preenchimento dominar a
+reconstrução. O score lexical continua considerando somente posições reais.
 
 ### Avaliação
 

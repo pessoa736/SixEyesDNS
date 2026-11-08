@@ -72,6 +72,12 @@ def parse_args() -> argparse.Namespace:
         help="Probabilidade de mascarar caracteres durante o treino",
     )
     parser.add_argument(
+        "--pad-loss-weight",
+        type=float,
+        default=0.2,
+        help="Peso da perda nas posições PAD para o decoder aprender o fim",
+    )
+    parser.add_argument(
         "--numeric-noise-std",
         type=float,
         default=0.01,
@@ -179,6 +185,19 @@ def mode_scores(
     )
 
 
+def character_loss(
+    logits: torch.Tensor, targets: torch.Tensor, pad_weight: float
+) -> torch.Tensor:
+    """Treina caracteres reais e ensina o decoder a encerrar em PAD."""
+    losses = nn.functional.cross_entropy(logits, targets, reduction="none")
+    weights = torch.where(
+        targets == TOKEN_TO_INDEX[PAD],
+        torch.full_like(losses, pad_weight),
+        torch.ones_like(losses),
+    )
+    return (losses * weights).sum() / weights.sum().clamp_min(1.0)
+
+
 def main() -> None:
     args = parse_args()
     if (
@@ -188,6 +207,7 @@ def main() -> None:
         or args.weight_decay < 0
         or not 0 <= args.char_mask_prob < 1
         or args.numeric_noise_std < 0
+        or args.pad_loss_weight < 0
     ):
         raise ValueError("Parâmetros de treino inválidos")
     set_seed(args.seed)
@@ -257,7 +277,6 @@ def main() -> None:
         batch_size=args.batch_size,
         shuffle=True,
     )
-    text_loss = nn.CrossEntropyLoss(ignore_index=TOKEN_TO_INDEX[PAD])
     numeric_loss = nn.MSELoss()
     for offset in range(args.epochs):
         model.train()
@@ -274,7 +293,9 @@ def main() -> None:
             logits, reconstructed = model(
                 corrupted_characters, corrupted_numeric, mode=args.mode
             )
-            lexical_loss = text_loss(logits, characters)
+            lexical_loss = character_loss(
+                logits, characters, args.pad_loss_weight
+            )
             semantic_loss = numeric_loss(reconstructed, numeric)
             if args.mode == "lexical":
                 loss = lexical_loss
@@ -293,8 +314,10 @@ def main() -> None:
                 validation_normal_numeric,
                 mode=args.mode,
             )
-            validation_lexical_loss = text_loss(
-                validation_logits, validation_normal_characters
+            validation_lexical_loss = character_loss(
+                validation_logits,
+                validation_normal_characters,
+                args.pad_loss_weight,
             )
             validation_semantic_loss = numeric_loss(
                 validation_reconstructed, validation_normal_numeric
@@ -468,6 +491,7 @@ def main() -> None:
             "numeric_dim": len(FEATURE_COLUMNS),
             "architecture": "positional-conv-v2",
             "weight_decay": args.weight_decay,
+            "pad_loss_weight": args.pad_loss_weight,
             "numeric_weight": args.numeric_weight,
             "mode": args.mode,
             "score_formula": (
