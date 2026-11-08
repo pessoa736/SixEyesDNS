@@ -8,7 +8,7 @@ cd "$ROOT_DIR"
 mkdir -p data/raw/dnsmasq
 
 echo "Iniciando dnsmasq e o gerador..."
-docker compose up --build -d
+docker compose up --build --force-recreate -d
 
 echo
 docker compose ps
