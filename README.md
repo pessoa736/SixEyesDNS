@@ -84,9 +84,13 @@ O gerador normal usa combinações determinísticas de serviços fictícios
 (`web`, `api`, `catalog`, `auth`, `metrics`, `mail`, `cdn` e `dashboard`),
 regiões, ambientes e plataformas. Também produz casos difíceis com labels
 curtos, índices de nós, identificadores hash-like e prefixos hexadecimais
-curtos estilo CDN. Esses casos mantêm `family=normal` e são identificados
-pelo metadado `profile=normal_hard`; as reversas usam
-`profile=normal_reverse`.
+curtos estilo CDN (`profile=normal_hard`), consultas reversas PTR
+(`profile=normal_reverse`) e tráfego temático de entretenimento: memes
+clássicos (`doge`, `nyancat`, `rickroll`, `thisisfine`...) em
+`profile=normal_meme` e referências a Jujutsu Kaisen (`gojo`, `sukuna`,
+`domain-expansion`, `hollow-purple`...) em `profile=normal_jjk`, sempre na
+zona `.test`. Esses casos mantêm `family=normal` e servem para medir falsos
+positivos em domínios fora do padrão corporativo.
 
 O arquivo de rótulos registra sequência, timestamp UTC, serviço, perfil
 gerador e servidor DNS de destino para auditoria do laboratório; esses campos
@@ -308,6 +312,13 @@ Os gráficos do treinamento ficam em [`scripts/evaluate/`](scripts/evaluate/):
 RESULTS_DIR=results/autoencoder-lexical \
   ./scripts/evaluate/generate-plots.sh --test-samples 12
 ```
+
+Cada treino grava em `results/autoencoder-<modo>/`: `losses.png`,
+`metrics.png`, `confusion-matrices.png`, `score-distributions.png`,
+`test-samples.png`, `latent-space.png` (projeção do teste nas duas primeiras
+dimensões do espaço latente, colorida por classe e família) e
+`training.gif` (animação das curvas de perda e accuracy; desative com
+`--no-gif`).
 
 ### Testes
 
