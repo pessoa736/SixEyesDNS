@@ -1,0 +1,8 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache unbound \
+	&& mkdir -p /var/log/unbound
+
+COPY unbound.conf /etc/unbound/unbound.conf
+
+ENTRYPOINT ["unbound", "-d", "-c", "/etc/unbound/unbound.conf"]

@@ -18,6 +18,36 @@ services:
       unlimited-void-net:
         ipv4_address: 172.30.0.2
 
+  bind9:
+    build: ./docker/bind9
+    volumes:
+      - ./data/raw/bind9:/var/log/named
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.3
+
+  resolver:
+    build: ./docker/resolver
+    depends_on:
+      - dnsmasq
+      - bind9
+    volumes:
+      - ./data/raw/resolver:/var/log/unbound
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.4
+
+  dhcp:
+    build: ./docker/dhcp
+    volumes:
+      - ./data/raw/dhcp:/var/log/kea
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.5
+
   fake-services:
     build: ./docker/service-api
     environment:
@@ -38,7 +68,8 @@ services:
       REQUEST_INTERVAL: "0.5"
       TRAFFIC_SEED: "42"
     networks:
-      unlimited-void-net: null
+      unlimited-void-net:
+        ipv4_address: 172.30.0.7
 
   nginx:
     image: nginx:1.27.2-alpine
@@ -58,10 +89,13 @@ services:
     build: ./docker/generator
     depends_on:
       - dnsmasq
+      - bind9
+      - resolver
     networks:
-      unlimited-void-net: null
+      unlimited-void-net:
+        ipv4_address: 172.30.0.6
     environment:
-      DNS_SERVER: dnsmasq
+      DNS_TARGETS: "resolver:70,dnsmasq:20,bind9:10"
       DNS_PORT: "53"
       QUERY_COUNT: "10000"
       QUERY_INTERVAL: "0.01"

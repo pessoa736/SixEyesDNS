@@ -1,0 +1,17 @@
+$TTL 60
+@   IN  SOA ns1.test. admin.test. (
+        2026110801 ; serial
+        300        ; refresh
+        60         ; retry
+        604800     ; expire
+        60         ; minimum
+)
+        IN  NS  ns1.test.
+2.0     IN  PTR dnsmasq.test.
+3.0     IN  PTR ns1.test.
+4.0     IN  PTR resolver.test.
+5.0     IN  PTR dhcp.test.
+6.0     IN  PTR generator.test.
+7.0     IN  PTR backend-client.test.
+10.0    IN  PTR nginx.test.
+11.0    IN  PTR fake-services.test.
