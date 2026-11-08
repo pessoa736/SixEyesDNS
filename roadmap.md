@@ -31,12 +31,15 @@ O requisito acadêmico está em
 
 ## Fase 1 — Estrutura e schema
 
-Status: pendente.
+Status: parcialmente implementada.
 
-- [ ] Trabalhar na branch `ajustes-u3`.
+- [x] Trabalhar na branch `ajustes-u3`.
+- [x] Manter os módulos executáveis com `python -m source.<modulo>` nos
+      scripts de treino e plotagem.
+- [x] Manter `source/features.py` como origem dos atributos usados no treino.
 - [ ] Adicionar `source/__init__.py`.
-- [ ] Consolidar em `source/features.py` a normalização, tokenização, vocabulário
-      e os 42 atributos numéricos.
+- [ ] Consolidar completamente em `source/features.py` a normalização,
+      tokenização, vocabulário e os 42 atributos numéricos.
 - [ ] Separar explicitamente features e metadados.
 - [ ] Rejeitar automaticamente `label`, `family`, `query_type`, `seed`, IP e
       cliente na matriz de entrada.
@@ -53,7 +56,7 @@ Status: pendente.
 
 ## Fase 2 — Dados
 
-Status: diagnóstico concluído; implementação pendente.
+Status: laboratório e dataset sintético implementados; saneamento pendente.
 
 - [ ] Corrigir o alinhamento entre logs e rótulos e documentar o tratamento de
       execuções concatenadas e duplicatas.
@@ -69,21 +72,30 @@ Status: diagnóstico concluído; implementação pendente.
       rótulos para auditoria sem usá-los como features.
 - [x] Adicionar Nginx, API fictícia e dashboard local de coleta.
 - [x] Adicionar aplicações backend sintéticas e telemetria de requisições.
-- [ ] Garantir que o tráfego continue sintético, local e em `.test`.
+- [x] Manter o tráfego sintético, local e em `.test`.
 
 ## Fase 3 — Modelos, treino e avaliação
 
-Status: implementação pendente; não há métricas finais.
+Status: treino lexical, semântico e híbrido implementado; avaliação final
+pendente.
 
 - [ ] Implementar `DenseAE` para 42 atributos e score MSE.
-- [ ] Implementar `CharAE` com tokens, convoluções e perda CE ignorando PAD.
-- [ ] Implementar `HybridAE` com score combinado CE/MSE.
-- [ ] Implementar `source/train.py` com seed 42, CPU, Adam, early stopping e
-      treino somente com normais.
+- [x] Implementar submodelo lexical independente com tokens, convoluções e
+      reconstrução de caracteres.
+- [x] Implementar `HybridAutoencoder` com score combinado CE/MSE.
+- [x] Implementar `source/train.py` com seed 42, CPU, Adam e treino somente
+      com exemplos normais.
+- [x] Permitir os modos `lexical`, `semantic` e `hybrid` por CLI.
+- [x] Permitir inicializar o encoder híbrido com o checkpoint lexical
+      pré-treinado.
 - [x] Combinar no treinamento o erro lexical CE e o MSE numérico por
       `z(CE) + lambda*z(MSE)`, com `lambda` configurável.
-- [ ] Salvar artefatos completos: modelo, scaler, vocabulário, configuração,
-      limiares e curva de perda.
+- [x] Salvar checkpoint, histórico, métricas, scaler, vocabulário e limiar.
+- [x] Gerar automaticamente gráficos ao terminar os wrappers de treinamento.
+- [x] Corrigir o plot lexical para mostrar erro por posição de caractere e o
+      plot híbrido/semântico para mostrar erro numérico.
+- [x] Organizar os scripts em `data/`, `model/`, `evaluate/`, `test/`, `lab/`
+      e `env/`.
 - [ ] Implementar `source/scoring.py` com limiar P99 e melhor F1 calibrados
       somente na validação.
 - [ ] Implementar baselines de entropia e Isolation Forest.
@@ -97,7 +109,7 @@ Status: implementação pendente; não há métricas finais.
 
 ## Fase 4 — Demonstração
 
-Status: pendente; entrega central.
+Status: dashboard pronto; demo do modelo pendente.
 
 - [ ] Criar `source/demo.py` usando a mesma normalização e features do treino.
 - [ ] Criar `scripts/demo.sh`.
@@ -112,10 +124,11 @@ Status: pendente; entrega central.
 - [x] Adicionar gráficos visuais de famílias DNS, aplicações e serviços.
 - [x] Simular navegação orgânica somente em sites sintéticos `.test`, com
       sessões, pesos, pausas e telemetria por site.
+- [x] Adicionar scripts de teste para pytest, checkpoint e geração de plots.
 
 ## Fase 5 — Relatório e apresentação
 
-Status: diagnóstico documental concluído; consolidação pendente.
+Status: documentação inicial concluída; consolidação final pendente.
 
 - [ ] Organizar o README com Introdução, Desenvolvimento/Técnicas, Resultados,
       Reprodução, Segurança/Ética e Referências.
@@ -126,6 +139,8 @@ Status: diagnóstico documental concluído; consolidação pendente.
       introdução 1,5; pipeline 2; modelos 2; resultados 3; demo 1,5.
 - [ ] Listar as figuras necessárias para a apresentação.
 - [ ] Atualizar referências apenas para fontes realmente utilizadas.
+- [x] Versionar os resultados gráficos dos treinamentos lexical, semântico e
+      híbrido produzidos localmente.
 - [ ] Sugerir, sem executar, os comandos `gh repo edit` e criação da tag
       `entrega-u3` no dia da entrega.
 
@@ -133,8 +148,8 @@ Status: diagnóstico documental concluído; consolidação pendente.
 
 - [ ] `./scripts/data/process-data.sh` roda do zero e falha em caso de
       interseção.
-- [ ] `python -m source.train --model dense|char|hybrid` roda em CPU em poucos
-      minutos com o dataset versionado.
+- [ ] `python -m source.train --mode lexical|semantic|hybrid` roda em CPU em
+      poucos minutos com o dataset versionado.
 - [ ] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
       versionado.
 - [ ] `pytest` passa.
@@ -147,10 +162,10 @@ Status: diagnóstico documental concluído; consolidação pendente.
 
 ## Ordem de execução
 
-1. Corrigir estrutura e schema.
-2. Corrigir e documentar os dados.
-3. Implementar modelos, treino e avaliação.
-4. Implementar a demonstração offline/local.
-5. Executar testes e gerar resultados.
-6. Consolidar README, roteiro e figuras.
+1. Corrigir estrutura e schema restantes.
+2. Corrigir e documentar o alinhamento dos dados.
+3. Implementar `DenseAE`, scoring, baselines e avaliação completa.
+4. Executar a suíte de testes no ambiente AMD/CPU configurado.
+5. Implementar a demonstração offline/local.
+6. Consolidar README, roteiro, métricas e figuras.
 7. Fazer revisão final antes da apresentação e do prazo do texto.
