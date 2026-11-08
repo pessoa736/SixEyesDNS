@@ -224,3 +224,6 @@ archive/
 
 # Dados gerados pelo laboratório DNS
 data/raw/
+
+# Resultados locais e temporários do treinamento
+results/autoencoder/*.json
