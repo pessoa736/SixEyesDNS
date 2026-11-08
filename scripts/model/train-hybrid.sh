@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 SPLITS_DIR="${SPLITS_DIR:-data/processed/splits}"
@@ -16,7 +16,7 @@ if [[ ! -f "$SPLITS_DIR/train.csv" ||
       ! -f "$SPLITS_DIR/validation.csv" ||
       ! -f "$SPLITS_DIR/test.csv" ]]; then
     echo "Erro: splits não encontrados em: $SPLITS_DIR" >&2
-    echo "Execute ./scripts/process-data.sh antes do treinamento." >&2
+    echo "Execute ./scripts/data/process-data.sh antes do treinamento." >&2
     exit 1
 fi
 
@@ -24,7 +24,8 @@ echo "Iniciando treinamento do autoencoder."
 echo "Splits: $SPLITS_DIR"
 echo "Saída: $OUTPUT_DIR"
 
-"$PYTHON_BIN" source/train.py \
+"$PYTHON_BIN" -m source.train \
+    --mode hybrid \
     --splits-dir "$SPLITS_DIR" \
     --output-dir "$OUTPUT_DIR" \
     "$@"

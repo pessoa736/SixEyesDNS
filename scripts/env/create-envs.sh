@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON="${PYTHON:-}"
 
 if [[ -z "$PYTHON" ]]; then
@@ -82,7 +83,7 @@ GPU="$(detect_gpu)"
 PYTHON_VERSION="$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 case "$GPU" in
     nvidia)
-        ENV_DIR=".venv-nvidia"
+        ENV_DIR="$ROOT_DIR/.venv-nvidia"
         TENSORFLOW_PACKAGE="tensorflow"
         echo "GPU NVIDIA detectada. Criando $ENV_DIR..."
         ;;
@@ -95,11 +96,11 @@ case "$GPU" in
             echo "Erro: o ambiente AMD exige Python 3.12 (o wheel ROCm usado é cp312)." >&2
             exit 1
         fi
-        ENV_DIR=".venv-amd"
+        ENV_DIR="$ROOT_DIR/.venv-amd"
         echo "GPU AMD detectada. Criando $ENV_DIR..."
         ;;
     cpu)
-        ENV_DIR=".venv-cpu"
+        ENV_DIR="$ROOT_DIR/.venv-cpu"
         TENSORFLOW_PACKAGE="tensorflow"
         echo "Nenhuma GPU compatível detectada. Criando $ENV_DIR para CPU..."
         ;;

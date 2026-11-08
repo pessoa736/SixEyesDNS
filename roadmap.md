@@ -131,7 +131,8 @@ Status: diagnóstico documental concluído; consolidação pendente.
 
 ## Critérios de aceitação
 
-- [ ] `./scripts/process-data.sh` roda do zero e falha em caso de interseção.
+- [ ] `./scripts/data/process-data.sh` roda do zero e falha em caso de
+      interseção.
 - [ ] `python -m source.train --model dense|char|hybrid` roda em CPU em poucos
       minutos com o dataset versionado.
 - [ ] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 RESULTS_DIR="${RESULTS_DIR:-results/autoencoder}"
@@ -14,12 +14,12 @@ fi
 if [[ ! -f "$RESULTS_DIR/history.json" ||
       ! -f "$RESULTS_DIR/metrics.json" ]]; then
     echo "Erro: resultados de treinamento não encontrados em: $RESULTS_DIR" >&2
-    echo "Execute ./scripts/train-model.sh antes da plotagem." >&2
+    echo "Execute um script em ./scripts/model/ antes da plotagem." >&2
     exit 1
 fi
 
 echo "Gerando gráficos do modelo em: $RESULTS_DIR"
 
-"$PYTHON_BIN" source/plot_training.py \
+"$PYTHON_BIN" -m source.plot_training \
     --results-dir "$RESULTS_DIR" \
     "$@"

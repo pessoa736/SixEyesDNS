@@ -96,7 +96,7 @@ variação entre aplicações. Os sites são `portal.atlas.test`,
 O fluxo atual é:
 
 ```bash
-./scripts/process-data.sh
+./scripts/data/process-data.sh
 ```
 
 Ele executa `source/process_raw.py` e `source/split_dataset.py` sobre os
@@ -220,7 +220,7 @@ As versões das dependências devem permanecer fixadas em
 ### Coleta local
 
 ```bash
-./scripts/docker-run.sh
+./scripts/lab/docker-run.sh
 docker compose wait generator
 ```
 
@@ -234,10 +234,35 @@ Para observar as aplicações falsas:
 docker compose logs -f backend-client fake-services
 ```
 
+### Construção dos modelos
+
+Os wrappers em [`scripts/model/`](scripts/model/) organizam os três casos de
+uso:
+
+```bash
+./scripts/model/train-lexical.sh
+./scripts/model/train-semantic.sh
+./scripts/model/train-hybrid.sh \
+  --lexical-checkpoint results/autoencoder-lexical/model.pt
+```
+
+Para executar os três treinamentos em sequência:
+
+```bash
+./scripts/model/train-all.sh
+```
+
+Os gráficos do treinamento ficam em [`scripts/evaluate/`](scripts/evaluate/):
+
+```bash
+RESULTS_DIR=results/autoencoder-lexical \
+  ./scripts/evaluate/generate-plots.sh --test-samples 12
+```
+
 Para recriar os containers:
 
 ```bash
-./scripts/docker-recreate.sh
+./scripts/lab/docker-recreate.sh
 ```
 
 A publicação `127.0.0.1:6767:53` está configurada no compose, mas deve ser
@@ -249,7 +274,7 @@ Em ambientes Docker Desktop ou VS Code nos quais a porta publicada pelo
 daemon não aparece no host, use o servidor local do dashboard:
 
 ```bash
-./scripts/dashboard.sh
+./scripts/lab/dashboard.sh
 ```
 
 Esse servidor escuta somente em `127.0.0.1:8080` e lê o resumo produzido pelo
@@ -259,7 +284,7 @@ laboratório.
 ### Processamento
 
 ```bash
-./scripts/process-data.sh
+./scripts/data/process-data.sh
 ```
 
 O fluxo futuro deve ser executável também como módulos:
@@ -277,7 +302,7 @@ e recrie os serviços:
 ```bash
 rm -f data/raw/query_labels.csv data/raw/dashboard/traffic_summary.json
 rm -f data/raw/dnsmasq/dnsmasq.log
-./scripts/docker-recreate.sh
+./scripts/lab/docker-recreate.sh
 ```
 
 Não remova dados versionados sem revisar o diff. O gerador continua limitado à
@@ -297,6 +322,12 @@ SixEyesDNS/
 │   ├── nginx/
 │   └── service-api/
 ├── scripts/
+│   ├── data/
+│   ├── model/
+│   ├── evaluate/
+│   ├── demo/
+│   ├── lab/
+│   └── env/
 ├── source/
 ├── results/
 ├── docker-compose.yml
