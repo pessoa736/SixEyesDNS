@@ -7,6 +7,7 @@ import copy
 import csv
 import json
 import random
+import time
 from pathlib import Path
 
 import matplotlib
@@ -382,10 +383,11 @@ def main() -> None:
         shuffle=True,
     )
     numeric_loss = nn.MSELoss()
-    print_interval = max(1, args.epochs // 20)
+    print_interval = max(1, args.epochs // 10)
     total_epochs = start_epoch + args.epochs - 1
     live_plot = LiveTrainingPlot(enabled=not args.no_live_plot)
     epochs_without_improvement = 0
+    last_report_time = time.monotonic()
     for offset in range(args.epochs):
         model.train()
         losses = []
@@ -507,7 +509,13 @@ def main() -> None:
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
-        if (offset + 1) % print_interval == 0 or offset == args.epochs - 1:
+        now = time.monotonic()
+        if (
+            (offset + 1) % print_interval == 0
+            or now - last_report_time >= 5.0
+            or offset == args.epochs - 1
+        ):
+            last_report_time = now
             print(
                 f"Época {epoch:03d}/{total_epochs:03d} | "
                 f"treino_loss={np.mean(losses):.6f} | "
