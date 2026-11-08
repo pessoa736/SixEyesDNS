@@ -38,16 +38,20 @@ class CharAutoencoder(nn.Module):
             nn.Conv1d(64, vocabulary_size, 3, padding=1),
         )
 
+    def encode(self, characters: torch.Tensor) -> torch.Tensor:
+        """Projeta caracteres no espaço latente."""
+        encoded = self.char_encoder(
+            self.embedding(characters).transpose(1, 2)
+        ).flatten(start_dim=1)
+        return self.latent(encoded)
+
     def forward(
         self,
         characters: torch.Tensor,
         numeric: torch.Tensor | None = None,
         mode: str = "lexical",
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        encoded = self.char_encoder(
-            self.embedding(characters).transpose(1, 2)
-        ).flatten(start_dim=1)
-        logits = self.char_decoder(self.latent(encoded))
+        logits = self.char_decoder(self.encode(characters))
         return logits, torch.empty((characters.shape[0], 0), device=characters.device)
 
 
@@ -118,12 +122,13 @@ class HybridAutoencoder(nn.Module):
             nn.Conv1d(64, vocabulary_size, kernel_size=3, padding=1),
         )
 
-    def forward(
+    def encode(
         self,
         characters: torch.Tensor,
         numeric: torch.Tensor,
         mode: str = "hybrid",
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
+        """Projeta a entrada no espaço latente conforme o modo."""
         if mode not in {"lexical", "semantic", "hybrid"}:
             raise ValueError(f"Modo de autoencoder inválido: {mode}")
         if mode == "semantic":
@@ -141,9 +146,17 @@ class HybridAutoencoder(nn.Module):
             )
         else:
             numeric_encoding = self.numeric_encoder(numeric)
-        latent = self.latent(
+        return self.latent(
             torch.cat((char_position_encoding, numeric_encoding), dim=1)
         )
+
+    def forward(
+        self,
+        characters: torch.Tensor,
+        numeric: torch.Tensor,
+        mode: str = "hybrid",
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        latent = self.encode(characters, numeric, mode)
         numeric_output = self.numeric_decoder(latent)
         char_logits = self.char_decoder(latent)
         return char_logits, numeric_output

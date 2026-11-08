@@ -13,6 +13,7 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import animation
 import torch
 from sklearn.preprocessing import StandardScaler
 from torch import nn
@@ -110,6 +111,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Desativa a janela interativa de acompanhamento do treino",
     )
+    parser.add_argument(
+        "--no-gif",
+        action="store_true",
+        help="Desativa o GIF animado das curvas de treino",
+    )
     return parser.parse_args()
 
 
@@ -175,6 +181,64 @@ class LiveTrainingPlot:
             plt.ioff()
             plt.close(self.figure)
             self.figure = None
+
+
+def save_training_gif(history: list[dict[str, float]], output_dir: Path) -> Path | None:
+    """Grava um GIF com a evolução das curvas de perda e accuracy."""
+    if len(history) < 2:
+        return None
+    frame_count = min(60, len(history))
+    frame_indices = np.unique(
+        np.linspace(1, len(history), num=frame_count, dtype=int)
+    )
+    epochs = [item["epoch"] for item in history]
+    train_loss = [item["train_loss"] for item in history]
+    validation_loss = [item["validation_loss"] for item in history]
+    accuracy = [item["validation_accuracy"] for item in history]
+
+    figure, (loss_axis, accuracy_axis) = plt.subplots(1, 2, figsize=(11, 4))
+    figure.suptitle("Evolução do treinamento")
+
+    def draw(frame: int) -> None:
+        end = int(frame_indices[frame])
+        loss_axis.clear()
+        loss_axis.plot(epochs[:end], train_loss[:end], label="Treino")
+        loss_axis.plot(
+            epochs[:end], validation_loss[:end], label="Validação normal"
+        )
+        loss_axis.set_title("Perda de reconstrução")
+        loss_axis.set_xlabel("Época")
+        loss_axis.set_xlim(epochs[0], epochs[-1])
+        loss_axis.set_ylim(0, max(train_loss) * 1.05)
+        loss_axis.grid(alpha=0.25)
+        loss_axis.legend(loc="upper right")
+        accuracy_axis.clear()
+        accuracy_axis.plot(
+            epochs[:end],
+            accuracy[:end],
+            color="tab:green",
+            label="Validação - P99",
+        )
+        accuracy_axis.set_title("Accuracy de classificação")
+        accuracy_axis.set_xlabel("Época")
+        accuracy_axis.set_xlim(epochs[0], epochs[-1])
+        accuracy_axis.set_ylim(0, 1.05)
+        accuracy_axis.grid(alpha=0.25)
+        accuracy_axis.legend(loc="lower right")
+        figure.tight_layout()
+
+    try:
+        gif = animation.FuncAnimation(
+            figure, draw, frames=len(frame_indices), interval=100
+        )
+        gif_path = output_dir / "training.gif"
+        gif.save(gif_path, writer=animation.PillowWriter(fps=10))
+        return gif_path
+    except Exception as error:
+        print(f"GIF do treinamento desativado: {error}")
+        return None
+    finally:
+        plt.close(figure)
 
 
 def confusion_matrix(labels: np.ndarray, predictions: np.ndarray) -> list[list[int]]:
@@ -657,6 +721,10 @@ def main() -> None:
     )
     (args.output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
     (args.output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    if not args.no_gif:
+        gif_path = save_training_gif(history, args.output_dir)
+        if gif_path is not None:
+            print(f"GIF do treinamento salvo em: {gif_path}")
 
 
 if __name__ == "__main__":

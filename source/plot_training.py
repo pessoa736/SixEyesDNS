@@ -9,11 +9,19 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+from sklearn.preprocessing import StandardScaler
 
 if __package__:
+    from .features import FEATURE_COLUMNS, transform_features
+    from .models import CharAutoencoder, HybridAutoencoder
     from .test_model import generate_test_plot
+    from .train import encode_domains
 else:
+    from features import FEATURE_COLUMNS, transform_features
+    from models import CharAutoencoder, HybridAutoencoder
     from test_model import generate_test_plot
+    from train import encode_domains
 
 
 def parse_args() -> argparse.Namespace:
@@ -253,6 +261,111 @@ def plot_thresholds(metrics: dict[str, object], output_dir: Path) -> None:
     figure.savefig(output_dir / "thresholds.png", dpi=150)
 
 
+def plot_latent_space(
+    splits_dir: Path, results_dir: Path, max_points: int = 4000
+) -> Path | None:
+    """Projeta o teste no espaço latente e desenha pontos por classe/família."""
+    checkpoint_path = results_dir / "model.pt"
+    test_path = splits_dir / "test.csv"
+    if not checkpoint_path.is_file() or not test_path.is_file():
+        return None
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    mode = checkpoint.get("mode", "hybrid")
+    latent_dim = int(checkpoint["latent_dim"])
+    if latent_dim < 2:
+        return None
+    if mode == "lexical":
+        model: torch.nn.Module = CharAutoencoder(
+            len(checkpoint["vocabulary"]),
+            int(checkpoint["max_length"]),
+            latent_dim,
+        )
+    else:
+        model = HybridAutoencoder(
+            len(checkpoint["feature_columns"]),
+            len(checkpoint["vocabulary"]),
+            int(checkpoint["max_length"]),
+            latent_dim,
+        )
+    model.load_state_dict(checkpoint["model_state"])
+    model.eval()
+
+    with test_path.open(newline="", encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+    if not rows:
+        return None
+    characters = encode_domains(rows)
+    scaler = StandardScaler()
+    scaler.mean_ = np.asarray(checkpoint["scaler_mean"], dtype=np.float64)
+    scaler.scale_ = np.asarray(checkpoint["scaler_scale"], dtype=np.float64)
+    numeric = torch.from_numpy(
+        scaler.transform(transform_features(rows)).astype(np.float32)
+    )
+    with torch.no_grad():
+        if mode == "lexical":
+            latent = model.encode(characters)
+        else:
+            latent = model.encode(characters, numeric, mode=mode)
+    points = latent.numpy()
+
+    labels = np.asarray([row["label"] for row in rows])
+    families = np.asarray([row.get("family", "") for row in rows])
+    normal_profiles = np.asarray(
+        [
+            row.get("profile", "normal") if label == "normal" else ""
+            for row, label in zip(rows, labels)
+        ]
+    )
+    groups: list[tuple[str, np.ndarray]] = [("normal", labels == "normal")]
+    hard = (labels == "normal") & (normal_profiles != "normal")
+    if hard.any():
+        groups = [("normal", (labels == "normal") & ~hard), ("normal difícil", hard)]
+    for family in sorted({family for family in families if family != "normal"}):
+        groups.append((family, families == family))
+
+    palette = (
+        "#7dd3fc", "#c4b5fd", "#4ade80", "#fbbf24", "#fb7185",
+        "#f472b6", "#38bdf8", "#a3e635", "#f97316", "#e879f9",
+    )
+    background = "#0b0f19"
+    rng = np.random.default_rng(42)
+    figure, axis = plt.subplots(figsize=(9, 7), facecolor=background)
+    axis.set_facecolor(background)
+    for color, (name, mask) in zip(palette, groups):
+        if not mask.any():
+            continue
+        indices = np.flatnonzero(mask)
+        if len(indices) > max_points:
+            indices = rng.choice(indices, size=max_points, replace=False)
+        axis.scatter(
+            points[indices, 0],
+            points[indices, 1],
+            s=4,
+            alpha=0.75,
+            linewidths=0,
+            color=color,
+            label=name,
+        )
+    axis.set_xlabel("primeira dimensão do código latente", color="#d1d5db")
+    axis.set_ylabel("segunda dimensão do código latente", color="#d1d5db")
+    axis.set_title(
+        f"Teste no espaço latente ({mode}, {latent_dim}D)", color="#e5e7eb"
+    )
+    axis.grid(alpha=0.15, color="#4b5563")
+    axis.tick_params(colors="#9ca3af")
+    for spine in axis.spines.values():
+        spine.set_color("#374151")
+    legend = axis.legend(
+        loc="best", fontsize=9, facecolor="#111827", labelcolor="#e5e7eb"
+    )
+    legend.get_frame().set_edgecolor("#374151")
+    figure.tight_layout()
+    output = results_dir / "latent-space.png"
+    figure.savefig(output, dpi=150, facecolor=background)
+    plt.close(figure)
+    return output
+
+
 def main() -> None:
     args = parse_args()
     args.results_dir.mkdir(parents=True, exist_ok=True)
@@ -266,6 +379,7 @@ def main() -> None:
     plot_confusion_matrices(metrics, args.results_dir)
     plot_score_distributions(metrics, args.results_dir, args.splits_dir)
     plot_thresholds(metrics, args.results_dir)
+    latent_plot = plot_latent_space(args.splits_dir, args.results_dir)
     test_plot = generate_test_plot(
         args.splits_dir,
         args.results_dir,
@@ -273,6 +387,8 @@ def main() -> None:
         show=args.show,
     )
     print(f"Graficos salvos em: {args.results_dir}")
+    if latent_plot is not None:
+        print(f"Grafico do espaco latente salvo em: {latent_plot}")
     print(f"Grafico de teste salvo em: {test_plot}")
     if args.show:
         plt.show()
