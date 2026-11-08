@@ -76,6 +76,14 @@ Status: laboratório e dataset sintético implementados; saneamento pendente.
 - [x] Adicionar Nginx, API fictícia e dashboard local de coleta.
 - [x] Adicionar aplicações backend sintéticas e telemetria de requisições.
 - [x] Manter o tráfego sintético, local e em `.test`.
+- [x] Adicionar BIND9 autoritativo (zona `test.` e reversa), resolvedor
+      Unbound e DHCP Kea ao laboratório.
+- [x] Distribuir as consultas do gerador por múltiplos servidores DNS com
+      pesos (`DNS_TARGETS`), tipos ponderados por classe, reversas PTR e
+      jitter determinístico.
+- [x] Ler logs do dnsmasq e do BIND9 no `process_raw.py` (múltiplos `--log`).
+- [x] Ampliar o dashboard com consultas por servidor, por tipo, por minuto,
+      falhas DNS e tabela de infraestrutura.
 
 ## Fase 3 — Modelos, treino e avaliação
 

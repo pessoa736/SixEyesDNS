@@ -50,27 +50,49 @@ uma tabela final de métricas válida para o relatório.
 
 ### Laboratório e dados
 
-O laboratório usa Docker com `dnsmasq` em uma rede interna. O compose define
-`QUERY_COUNT=10000`, `ANOMALY_RATE=0.5` e `SEED=42`. O tráfego deve permanecer
-local, usando a zona reservada `.test`; o dnsmasq não possui servidores
-upstream configurados.
+O laboratório usa Docker em uma rede interna (`172.30.0.0/24`) com quatro
+serviços de infraestrutura de rede:
+
+- `resolver` (Unbound, 172.30.0.4): resolvedor recursivo, porta de entrada
+  dos clientes; encaminha a zona `test.` para os autoritativos e a reversa
+  `30.172.in-addr.arpa` para o BIND9;
+- `dnsmasq` (172.30.0.2): autoritativo curinga, responde `#` → 172.30.0.11;
+- `bind9` (172.30.0.3): autoritativo BIND9 para a zona `test.` (curinga →
+  172.30.0.11) e para a zona reversa, com PTRs dos serviços do laboratório;
+- `dhcp` (ISC Kea, 172.30.0.5): DHCPv4 de cenário para a sub-rede, com pool
+  172.30.0.100–199 e DNS 172.30.0.4; em rede Docker interna não há clientes
+  de broadcast reais, mas o serviço sobe e registra leases.
+
+O compose define `QUERY_COUNT=10000`, `ANOMALY_RATE=0.5` e `SEED=42`. O
+tráfego deve permanecer local, usando a zona reservada `.test`; nenhum
+servidor possui upstream externo. O gerador distribui as consultas pelos
+servidores segundo `DNS_TARGETS` (padrão `resolver:70,dnsmasq:20,bind9:10`),
+com tipos ponderados por classe: normais dominam em `A`/`AAAA` e incluem
+consultas reversas `PTR`, enquanto anomalias concentram-se em `TXT`/`CNAME`,
+como em túneis DNS. O intervalo entre consultas tem jitter determinístico
+(0,5–1,5× `QUERY_INTERVAL`).
 
 As famílias anômalas atuais são:
 
 - base32;
 - hexadecimal;
-- base64 URL-safe.
+- base64 URL-safe;
+- baixa entropia;
+- codificações mistas.
 
 O gerador normal usa combinações determinísticas de serviços fictícios
 (`web`, `api`, `catalog`, `auth`, `metrics`, `mail`, `cdn` e `dashboard`),
 regiões, ambientes e plataformas. Também produz casos difíceis com labels
-curtos, índices de nós e identificadores hash-like. Esses casos mantêm
-`family=normal` e são identificados pelo metadado `profile=normal_hard`.
+curtos, índices de nós, identificadores hash-like e prefixos hexadecimais
+curtos estilo CDN. Esses casos mantêm `family=normal` e são identificados
+pelo metadado `profile=normal_hard`; as reversas usam
+`profile=normal_reverse`.
 
-As anomalias sintéticas incluem base32, hexadecimal, base64 URL-safe,
-payloads de baixa entropia e codificações mistas. O arquivo de rótulos registra
-sequência, timestamp UTC, serviço e perfil gerador para auditoria do
-laboratório; esses campos são metadados e não entram no modelo.
+O arquivo de rótulos registra sequência, timestamp UTC, serviço, perfil
+gerador e servidor DNS de destino para auditoria do laboratório; esses campos
+são metadados e não entram no modelo. Consultas respondidas pelo cache do
+resolvedor não chegam aos autoritativos e, portanto, não aparecem nos logs —
+comportamento realista de DNS.
 
 O laboratório também sobe um Nginx em `127.0.0.1:8080`, serviços fictícios,
 aplicações backend sintéticas e um dashboard local. As aplicações
@@ -80,9 +102,12 @@ dashboard mostra consultas DNS e requisições backend por aplicação, serviço
 rota, status e latência. Os dados ficam em
 `data/raw/dashboard/traffic_summary.json` e
 `data/raw/dashboard/backend_traffic.json`.
-Além das tabelas, a interface possui gráficos SVG de consultas por família DNS,
+Além das tabelas, a interface possui gráficos SVG de consultas por família
+DNS, por tipo de consulta e por minuto (normais e suspeitas empilhadas),
 requisições por aplicação e requisições por serviço, atualizados a cada dois
-segundos sem dependências externas.
+segundos sem dependências externas. Uma tabela de infraestrutura lista os
+serviços do laboratório com endereços e papéis, e outra mostra consultas,
+pesos e falhas por servidor DNS.
 
 Para aproximar padrões orgânicos sem acessar a Internet, os clients navegam
 somente por sites sintéticos `.test`, com pesos de popularidade, sessões de
@@ -100,7 +125,11 @@ O fluxo atual é:
 ```
 
 Ele executa `source/process_raw.py` e `source/split_dataset.py` sobre os
-arquivos em `data/raw/`. A implementação futura deve transformar
+arquivos em `data/raw/`. O `process_raw.py` aceita múltiplos logs e entende
+os formatos do dnsmasq (`query[TIPO] nome from IP`) e do BIND9
+(`query: nome IN TIPO`); por padrão, o script usa
+`data/raw/dnsmasq/dnsmasq.log` e `data/raw/bind9/queries.log` quando
+presentes. A implementação futura deve transformar
 `source/features.py` na única fonte da verdade para:
 
 - normalização do domínio, removendo `.test`;
@@ -328,7 +357,9 @@ e recrie os serviços:
 
 ```bash
 rm -f data/raw/query_labels.csv data/raw/dashboard/traffic_summary.json
-rm -f data/raw/dnsmasq/dnsmasq.log
+rm -f data/raw/dnsmasq/dnsmasq.log data/raw/bind9/queries.log
+rm -f data/raw/resolver/unbound.log data/raw/dhcp/kea-dhcp4.log
+rm -f data/raw/dhcp/kea-leases4.csv
 ./scripts/lab/docker-recreate.sh
 ```
 
@@ -344,6 +375,9 @@ SixEyesDNS/
 │   └── processed/
 ├── docker/
 │   ├── dnsmasq/
+│   ├── bind9/
+│   ├── resolver/
+│   ├── dhcp/
 │   ├── generator/
 │   ├── dashboard/
 │   ├── nginx/
