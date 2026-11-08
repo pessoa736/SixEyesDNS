@@ -105,6 +105,11 @@ def parse_args() -> argparse.Namespace:
         help="Desvio do ruído gaussiano nas features durante o treino",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Dispositivo de treino: 'auto' (padrão), 'cpu', 'cuda' ou 'cuda:N'",
+    )
     parser.add_argument("--fresh", action="store_true")
     parser.add_argument(
         "--no-live-plot",
@@ -123,6 +128,23 @@ def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def resolve_device(name: str) -> torch.device:
+    """Resolve 'auto', 'cpu', 'cuda' ou 'cuda:N' para um dispositivo válido."""
+    if name == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(name)
+    if device.type == "cuda":
+        if not torch.cuda.is_available():
+            raise ValueError(f"Dispositivo '{name}' indisponível: CUDA não detectada")
+        if device.index is not None and device.index >= torch.cuda.device_count():
+            raise ValueError(
+                f"Dispositivo '{name}' indisponível: "
+                f"{torch.cuda.device_count()} GPU(s) visível(eis)"
+            )
+    return device
 
 
 class LiveTrainingPlot:
@@ -296,8 +318,10 @@ def score_batch(
         if reconstructed_numeric.shape[1] == 0:
             numeric_error = np.zeros(characters.shape[0], dtype=np.float32)
         else:
-            numeric_error = ((reconstructed_numeric - numeric) ** 2).mean(dim=1).numpy()
-    return text_error.numpy(), numeric_error
+            numeric_error = (
+                ((reconstructed_numeric - numeric) ** 2).mean(dim=1).cpu().numpy()
+            )
+    return text_error.cpu().numpy(), numeric_error
 
 
 def combine_scores(
@@ -366,6 +390,11 @@ def main() -> None:
     ):
         raise ValueError("Parâmetros de treino inválidos")
     set_seed(args.seed)
+    device = resolve_device(args.device)
+    if device.type == "cuda":
+        print(f"Dispositivo: {device} ({torch.cuda.get_device_name(device)})")
+    else:
+        print("Dispositivo: CPU")
     train = read_rows(args.splits_dir / "train.csv")
     validation = read_rows(args.splits_dir / "validation.csv")
     test = read_rows(args.splits_dir / "test.csv")
@@ -398,6 +427,13 @@ def main() -> None:
                 if key.startswith(("embedding.", "char_encoder."))
             }
             model.load_state_dict(lexical_state, strict=False)
+    model.to(device)
+    validation_normal_numeric = validation_normal_numeric.to(device)
+    validation_normal_characters = validation_normal_characters.to(device)
+    validation_numeric = validation_numeric.to(device)
+    validation_characters = validation_characters.to(device)
+    test_numeric = test_numeric.to(device)
+    test_characters = test_characters.to(device)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
@@ -451,6 +487,7 @@ def main() -> None:
         TensorDataset(train_characters, train_numeric),
         batch_size=args.batch_size,
         shuffle=True,
+        pin_memory=device.type == "cuda",
     )
     numeric_loss = nn.MSELoss()
     print_interval = max(1, args.epochs // 10)
@@ -462,6 +499,8 @@ def main() -> None:
         model.train()
         losses = []
         for characters, numeric in loader:
+            characters = characters.to(device, non_blocking=True)
+            numeric = numeric.to(device, non_blocking=True)
             corrupted_characters = characters.clone()
             mask = (
                 torch.rand_like(corrupted_characters, dtype=torch.float32)
@@ -685,7 +724,9 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
-            "model_state": model.state_dict(),
+            "model_state": {
+                key: value.detach().cpu() for key, value in model.state_dict().items()
+            },
             "optimizer_state": optimizer.state_dict(),
             "best_validation_loss": best_validation_loss,
             "scaler_mean": scaler.mean_.tolist(),

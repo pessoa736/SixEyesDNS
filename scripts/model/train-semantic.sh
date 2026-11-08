@@ -7,12 +7,14 @@ cd "$ROOT_DIR"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/autoencoder-semantic}"
 PLOT_AFTER_TRAINING="${PLOT_AFTER_TRAINING:-1}"
+DEVICE="${DEVICE:-auto}"
 if [[ "$PYTHON_BIN" == "python" && -x "$ROOT_DIR/.venv-amd/bin/python" ]]; then
     PYTHON_BIN="$ROOT_DIR/.venv-amd/bin/python"
 fi
 
 "$PYTHON_BIN" -m source.train \
     --mode semantic \
+    --device "$DEVICE" \
     --output-dir "$OUTPUT_DIR" \
     "$@"
 

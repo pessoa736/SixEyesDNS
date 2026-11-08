@@ -15,6 +15,8 @@ print(f"PyTorch: {torch.__version__}")
 print(f"CUDA disponível: {torch.cuda.is_available()}")
 
 if torch.cuda.is_available():
-    print(f"Dispositivo: {torch.cuda.get_device_name(0)}")
+    print(f"GPUs visíveis: {torch.cuda.device_count()}")
+    for index in range(torch.cuda.device_count()):
+        print(f"  cuda:{index}: {torch.cuda.get_device_name(index)}")
 else:
     print("Dispositivo: CPU")

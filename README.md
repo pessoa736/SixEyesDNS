@@ -306,6 +306,34 @@ Para executar os três treinamentos em sequência:
 ./scripts/model/train-all.sh
 ```
 
+### Treino em GPU (local e NPAD)
+
+O treino usa `--device auto` por padrão: se o PyTorch detectar CUDA, o modelo
+treina na GPU; caso contrário, cai para CPU. A escolha pode ser forçada pela
+CLI (`--device cpu`, `--device cuda`, `--device cuda:1`) ou pela variável
+`DEVICE` dos wrappers:
+
+```bash
+DEVICE=cuda:1 ./scripts/model/train-hybrid.sh
+```
+
+Confira as GPUs visíveis com `python scripts/check_env.py`.
+
+No NPAD (UFRN), aloque uma GPU pelo Slurm e instale a variante do PyTorch
+compatível com o CUDA do nó (veja o comentário em
+[requirements.txt](requirements.txt)). Para usar a GPU que estiver livre no
+momento, exporte `CUDA_VISIBLE_DEVICES` com o índice dela antes de treinar —
+com `--device auto`, o treino usa automaticamente a GPU visível:
+
+```bash
+export CUDA_VISIBLE_DEVICES=0   # índice da GPU livre
+./scripts/model/train-hybrid.sh
+```
+
+No PC local com GPU AMD (RX 6600 XT), a variante CUDA do PyTorch não enxerga
+a placa e o treino cai para CPU; para usar a GPU local é preciso instalar a
+variante ROCm do PyTorch no ambiente.
+
 Os gráficos do treinamento ficam em [`scripts/evaluate/`](scripts/evaluate/):
 
 ```bash
