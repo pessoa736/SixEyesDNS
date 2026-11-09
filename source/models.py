@@ -88,13 +88,13 @@ class CharAutoencoder(nn.Module):
             nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(),
         )
         self.latent = nn.Sequential(
-            nn.Linear(64 * (max_length // 2), latent_dim),
+            nn.Linear(64 * ((max_length + 1) // 2), latent_dim),
             nn.Tanh(),
             nn.Dropout(0.10),
         )
         self.char_decoder = nn.Sequential(
-            nn.Linear(latent_dim, 64 * 32), nn.ReLU(), nn.Dropout(0.10),
-            nn.Unflatten(1, (32, 64)),
+            nn.Linear(latent_dim, 32 * max_length), nn.ReLU(), nn.Dropout(0.10),
+            nn.Unflatten(1, (32, max_length)),
             nn.Conv1d(32, 64, 3, padding=1), nn.ReLU(),
             nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(), nn.Dropout(0.10),
             nn.Conv1d(64, 64, 3, padding=1), nn.ReLU(),
@@ -156,7 +156,7 @@ class HybridAutoencoder(nn.Module):
             nn.ReLU(),
         )
         self.latent = nn.Sequential(
-            nn.Linear(64 * (max_length // 2) + 16, latent_dim),
+            nn.Linear(64 * ((max_length + 1) // 2) + 16, latent_dim),
             nn.Tanh(),
             nn.Dropout(0.10),
         )
@@ -171,10 +171,10 @@ class HybridAutoencoder(nn.Module):
             nn.Linear(32, numeric_dim),
         )
         self.char_decoder = nn.Sequential(
-            nn.Linear(latent_dim, 64 * 32),
+            nn.Linear(latent_dim, 32 * max_length),
             nn.ReLU(),
             nn.Dropout(0.10),
-            nn.Unflatten(1, (32, 64)),
+            nn.Unflatten(1, (32, max_length)),
             nn.Conv1d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv1d(64, 64, kernel_size=3, padding=1),
@@ -196,7 +196,7 @@ class HybridAutoencoder(nn.Module):
             raise ValueError(f"Modo de autoencoder inválido: {mode}")
         if mode == "semantic":
             char_position_encoding = torch.zeros(
-                (characters.shape[0], 64 * (self.max_length // 2)),
+                (characters.shape[0], 64 * ((self.max_length + 1) // 2)),
                 device=characters.device,
             )
         else:
