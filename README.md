@@ -63,10 +63,68 @@ do objetivo do modelo.
   estavam no treino do split versionado). **Decisão pendente:** regenerar
   `data/processed/` invalida os checkpoints e a release `hybrid-v1` atuais.
 
-Essas observações são diagnóstico, não resultados de desempenho. Não há ainda
-uma tabela final de métricas válida para o relatório.
+Essas observações são diagnóstico, não resultados de desempenho. A avaliação
+final, com métricas verificáveis, está na seção "Resultados".
+
+### Estado da branch principal
+
+A branch `master` recebeu a consolidação do laboratório, dos modelos, da
+avaliação e da documentação pela PR #1 (merge em 08/11/2026). O roadmap
+atualizado está em [`roadmap.md`](roadmap.md), e o texto da disciplina segue
+neste README.
 
 ## Desenvolvimento e técnicas
+
+### Visão geral do pipeline
+
+```mermaid
+flowchart TD
+    A["Laboratório local<br/>Docker · zona .test"] --> B["Gerador<br/>QUERY_COUNT · ANOMALY_RATE · SEED"]
+    B --> C["query_labels.csv<br/>sequence · timestamp · server"]
+    B --> D["Logs DNS<br/>dnsmasq · BIND9 · Unbound"]
+    C --> E["source.process_raw<br/>casamento por servidor, cliente,<br/>consulta, tipo e janela"]
+    D --> E
+    E -->|falha em conflito ou falta de evidência| F["Erro explícito<br/>dataset não é gravado"]
+    E --> G["dataset.csv<br/>42 features + 11 indicadores + 6 metadados<br/>9.911 linhas · 6.924 domínios"]
+    G --> H["source.split_dataset<br/>seed 42 · sem interseção de domínios"]
+    H --> I["train.csv<br/>3.482 linhas · só normais"]
+    H --> J["validation.csv<br/>3.085 linhas"]
+    H --> K["test.csv<br/>3.344 linhas"]
+    I --> L["source.train<br/>--mode lexical|semantic|hybrid"]
+    J --> L
+    L --> M["model.pt<br/>checkpoint + scaler + vocabulário + limiar"]
+    M --> N["source.evaluate<br/>P99 e melhor F1 na validação"]
+    K --> N
+    N --> O["results/evaluation/<br/>métricas · ablation · lofo<br/>prevalence · leakage · explain"]
+    M --> P["source.plot_training<br/>perdas · scores · confusões<br/>amostras · espaço latente"]
+```
+
+### Visão geral do fluxo de execução
+
+```mermaid
+sequenceDiagram
+    actor Autor
+    participant Gerador
+    participant DNS as "Servidores DNS"
+    participant Processador
+    participant Treino
+    participant Avaliacao
+
+    Autor->>Gerador: ./scripts/lab/docker-run.sh
+    Gerador->>DNS: consultas normais e suspeitas (multi-servidor)
+    DNS-->>Gerador: logs acumulados por execução
+    Gerador->>Processador: rótulos (sequence, timestamp, server)
+    Autor->>Processador: ./scripts/data/process-data.sh
+    Processador->>DNS: lê os logs de cada servidor-alvo
+    Processador->>Processador: casa por servidor, cliente, consulta, tipo e janela
+    Processador-->>Autor: dataset.csv + alignment.json (ou falha explícita)
+    Autor->>Treino: ./scripts/model/train-all.sh
+    Treino->>Treino: treina só com normais, seed 42
+    Treino-->>Autor: model.pt e figuras em results/autoencoder-<modo>/
+    Autor->>Avaliacao: ./scripts/evaluate/evaluate.sh
+    Avaliacao->>Avaliacao: calibra limiares na validação
+    Avaliacao-->>Autor: results/evaluation/ (22 artefatos)
+```
 
 ### Laboratório e dados
 
@@ -415,6 +473,64 @@ Na visualização de teste, `--samples` deve ser par: metade das amostras é
 selecionada da classe `normal` e metade da classe `suspeita`, permitindo uma
 comparação equilibrada no Matplotlib.
 
+#### Arquiteturas comparadas
+
+```mermaid
+flowchart LR
+    subgraph DenseAE["DenseAE · --mode semantic"]
+        D1["42 atributos"] --> D2["Linear 42→32<br/>ReLU · Dropout"]
+        D2 --> D3["Linear 32→16<br/>ReLU · Dropout"]
+        D3 --> D4["Linear 16→16<br/>Tanh"]
+        D4 --> D5["Decoder Linear<br/>16→16→32→42"]
+        D5 --> D6["score = MSE"]
+    end
+    subgraph CharAE["CharAE · --mode lexical"]
+        C1["64 posições<br/>vocabulário 41"] --> C2["Embedding 16"]
+        C2 --> C3["4 × Conv1d 64<br/>stride 2 na segunda"]
+        C3 --> C4["Linear → 16 latente<br/>Tanh"]
+        C4 --> C5["Decoder Linear + 4 × Conv1d<br/>saída 41 logits"]
+        C5 --> C6["score = CE"]
+    end
+    subgraph HybridAE["HybridAE · --mode hybrid"]
+        H1["64 posições"] --> H2["Embedding 16"]
+        H1 --> H3["42 atributos"]
+        H2 --> H4["4 × Conv1d 64"]
+        H3 --> H5["Linear 42→32→16"]
+        H4 --> H6["Concat<br/>2048 + 16"]
+        H5 --> H6
+        H6 --> H7["Linear → 16 latente<br/>Tanh"]
+        H7 --> H8["Decoder de caracteres<br/>+ decoder numérico"]
+        H8 --> H9["score = z(CE) + λ·z(MSE)"]
+    end
+```
+
+As três arquiteturas usam `latent_dim = 16`. O `HybridAutoencoder` aceita os
+três modos na mesma classe: em `lexical` o ramo numérico é zerado, em
+`semantic` o ramo de caracteres é zerado, e em `hybrid` ambos entram — o que
+permite inicializar o encoder híbrido com o checkpoint lexical.
+
+#### Fluxo de treinamento
+
+```mermaid
+flowchart TD
+    T1["train.csv<br/>3.482 normais"] --> T2["features.py<br/>normalização · tokenização<br/>42 atributos"]
+    T2 --> T3["StandardScaler<br/>ajustado só nos normais"]
+    T3 --> T4["encode_domain<br/>64 posições · PAD + UNK"]
+    T4 --> T5["source.train<br/>Adam · lr 1e-3 · weight_decay 1e-4<br/>batch 128 · seed 42"]
+    T5 --> T6["char_mask_prob 0.05<br/>numeric_noise_std 0.01<br/>pad_loss_weight 0.2"]
+    T6 --> T7["Época: treino → validação"]
+    T7 --> T8{"Perda de validação<br/>melhorou?"}
+    T8 -->|sim| T9["Salva checkpoint<br/>model_state + scaler +<br/>vocabulário + limiar"]
+    T8 -->|não| T10["Conta épocas sem melhora"]
+    T10 --> T11{"200 épocas<br/>sem melhora?"}
+    T11 -->|sim| T12["Early stopping"]
+    T11 -->|não| T7
+    T9 --> T7
+    T12 --> T13["Mede score nos normais<br/>da validação"]
+    T13 --> T14["Limiar P99<br/>calibrado na validação"]
+    T9 --> T15["source.plot_training<br/>losses · confusion-matrices<br/>score-distributions · latent-space<br/>test-samples · training.gif"]
+```
+
 ### Avaliação
 
 ```bash
@@ -459,9 +575,18 @@ HybridAE com o limiar de entropia e o Isolation Forest e grava tudo em
 Resultados no teste, por registro, gerados em
 [`results/evaluation/summary.md`](results/evaluation/summary.md) (3.344
 registros e 2.438 domínios únicos; 77,6% de suspeitas). As tabelas por domínio
-único ficam no mesmo arquivo.
+único ficam no mesmo arquivo. A seção "Resultados" traz as tabelas completas,
+a análise crítica e as conclusões.
 
-Limiar P99 dos normais da validação:
+## Resultados
+
+Todo número desta seção vem de um arquivo gerado em
+[`results/evaluation/`](results/evaluation/) — as tabelas do README e do
+`summary.md` foram conferidas célula a célula contra
+[`metrics.csv`](results/evaluation/metrics.csv). O protocolo de avaliação está
+descrito em "Avaliação", acima.
+
+### Teste por registro — limiar P99 dos normais da validação
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
 |---|---|---|---|---|---|---|---|
@@ -471,7 +596,7 @@ Limiar P99 dos normais da validação:
 | CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
 | HybridAE | 0.9973 | 1.0000 | 0.9987 | 0.0093 | 1.0000 | 1.0000 | 1.0000 |
 
-Limiar de melhor F1 da validação:
+### Teste por registro — limiar de melhor F1 da validação
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
 |---|---|---|---|---|---|---|---|
@@ -481,12 +606,78 @@ Limiar de melhor F1 da validação:
 | CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
 | HybridAE | 0.9996 | 1.0000 | 0.9998 | 0.0013 | 1.0000 | 1.0000 | 1.0000 |
 
-Como 77,6% do teste é suspeito, marcar tudo como suspeito já rende F1 de
-0,8739; compare também FPR, ROC-AUC e PR-AUC. O DenseAE tem ROC-AUC alto, mas
-só 0,5592 de recall no limiar P99: com apenas os 42 atributos, parte das
-anomalias fica dentro da cauda dos normais.
+### Teste por domínio único — limiar P99 dos normais da validação
 
-#### Limitações e riscos
+| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
+|---|---|---|---|---|---|---|---|
+| Limiar de entropia | 0.9838 | 0.2432 | 0.3900 | 0.0182 | 0.7880 | 0.9424 | 0.1807 |
+| Isolation Forest | 0.9932 | 0.5861 | 0.7372 | 0.0182 | 0.9582 | 0.9895 | 0.5125 |
+| DenseAE (atributos) | 0.9982 | 0.5470 | 0.7068 | 0.0045 | 0.9820 | 0.9955 | 0.6667 |
+| CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
+| HybridAE | 0.9965 | 1.0000 | 0.9983 | 0.0159 | 1.0000 | 1.0000 | 1.0000 |
+
+### Teste por domínio único — limiar de melhor F1 da validação
+
+| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
+|---|---|---|---|---|---|---|---|
+| Limiar de entropia | 0.8219 | 0.9980 | 0.9014 | 0.9818 | 0.7880 | 0.9424 | 0.1807 |
+| Isolation Forest | 0.9379 | 0.9830 | 0.9599 | 0.2955 | 0.9582 | 0.9895 | 0.5125 |
+| DenseAE (atributos) | 0.9712 | 0.9795 | 0.9753 | 0.1318 | 0.9820 | 0.9955 | 0.6667 |
+| CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
+| HybridAE | 0.9995 | 1.0000 | 0.9997 | 0.0023 | 1.0000 | 1.0000 | 1.0000 |
+
+### Leitura dos resultados
+
+**O problema é mais fácil do que parece.** Com 77,6% de suspeitas no teste,
+marcar tudo como suspeito já rende precisão 0,7760, recall 1 e F1 0,8739 —
+acima de todos os baselines. Só o CharAE (1,0000) e o HybridAE (0,9987) fazem
+melhor que o classificador trivial, e o DenseAE (0,7169) fica abaixo dele. Se
+a leitura parasse no F1, o trabalho pareceria ter resolvido o problema; o FPR
+é que revela a história real.
+
+**A ordem de mérito muda com a métrica.** Pelo F1 no P99, CharAE e HybridAE
+empatam em primeiro. Pelo recall a FPR ≤ 1%, que é a métrica relevante quando
+suspeitas são raras, o HybridAE e o CharAE mantêm 1,0000 e o DenseAE cai para
+0,7368. No limiar de melhor F1, o HybridAE tem FPR de 0,0013 (1 falso positivo
+em 749 normais) contra 0,0000 do CharAE — **o CharAE não erra nada neste
+teste**: zero falsos positivos e zero falsos negativos, nas duas políticas e
+nos dois níveis. O HybridAE acerta as mesmas 2.595 suspeitas, mas erra 7
+normais no P99.
+
+**O DenseAE é o mais honesto dos três.** Com os mesmos 42 atributos que o
+Isolation Forest, ele acerta o dobro dos falsos positivos (FPR 0,0027 contra
+0,0254) e quase o dobro do recall (0,5592 contra 0,4513) no limiar P99. Mas
+seu recall de 0,5592 revela o limite da representação agregada: sem a
+sequência de caracteres, parte das anomalias cai dentro da cauda dos normais.
+É o custo de um detector auditável, que explica cada decisão por atributos
+concretos.
+
+**O λ do score híbrido é pouco sensível.** Na ablação
+([`ablation.md`](results/evaluation/ablation.md)), λ entre 0,5 e 1 mantém F1
+de 0,9987 e recall a FPR ≤ 1% em 1,0000; λ = 2 é equivalente (0,9985) e λ = 4
+degrada para F1 0,9915 com recall a FPR ≤ 1% em 0,9888. λ = 0 (só o ramo
+lexical do híbrido) ainda mantém recall 1,0000, mas dobra o FPR do P99
+(0,0187 contra 0,0093). O score só com MSE dos atributos é o que decai de
+verdade: recall a FPR ≤ 1% cai para 0,8389 e F1 para 0,9076. Ou seja: **os
+dois ramos são necessários, e o ramo numérico não pode ser a única fonte do
+score**.
+
+**O leave-one-family-out mostra onde a calibração vaza.** O limiar de
+entropia perde a família `low_entropy` por completo (recall 0,0000 contra
+0,4000 com todas as famílias) e o Isolation Forest cai de 1,0000 para 0,8020.
+CharAE e HybridAE mantêm 1,0000 em todas as famílias omitidas. Como os modelos
+nunca veem suspeitas no treino, isso mostra que a **calibração do limiar** —
+não o aprendizado — é o gargalo dos baselines.
+
+**Explicabilidade confirma o mecanismo.** Os exemplos de maior score
+([`explain_examples.md`](results/evaluation/explain_examples.md)) apontam
+`char_freq_x` e `char_freq_q` muito acima da média, com erro concentrado em
+posições específicas — a assinatura de base32 e base64. Nos falsos positivos,
+o erro é pequeno e difuso (`f4bfff32c5.cdn.brisa`, score 6,82 contra o limiar
+4,41): são domínios normais com aparência de hash, não reconstruções
+erradas de verdade.
+
+### Análise crítica
 
 - **Conjunto sintético fácil.** CharAE e HybridAE separam o teste quase por
   completo (ROC-AUC 1,0000). Isso mostra que as anomalias geradas (base32,
@@ -517,6 +708,66 @@ anomalias fica dentro da cauda dos normais.
   rótulos (9.911 linhas); o alinhamento corrigido produz 10.000 linhas, mas
   mudaria os splits e invalidaria os checkpoints atuais. A regeneração depende
   de decisão do autor (veja o `roadmap.md`).
+
+### Conclusões
+
+1. **Autoencoders vencem os baselines, mas não pela razão óbvia.** O ganho do
+   CharAE e do HybridAE sobre o limiar de entropia e o Isolation Forest não
+   vem do F1 — vem do **FPR**. Com a mesma taxa de recall, o HybridAE sinaliza
+   0,0093 dos normais contra 0,9413 do limiar de entropia no limiar de melhor
+   F1. É a diferença entre um detector utilizável e um que alerta sobre quase
+   tudo.
+
+2. **Os dois ramos carregam informações diferentes — mas neste conjunto o
+   CharAE basta.** O CharAE sozinho (só caracteres) não erra nada: F1 1,0000,
+   zero falsos positivos e zero falsos negativos, nas duas políticas e nos dois
+   níveis. O ramo numérico sozinho (DenseAE) resolve pela metade (F1 0,7169).
+   O híbrido fica no meio: mesmo recall do CharAE, mas com 7 falsos positivos
+   no P99 — neste conjunto, **o híbrido não supera o CharAE**, e apresentar
+   o híbrido como "o melhor modelo" seria errado. A razão de mantê-lo é
+   robustez: o ramo numérico ancora a decisão quando a forma do domínio
+   varia mais que sua estatística agregada, e a ablação mostra que
+   eliminar o ramo lexical (λ → ∞, score só MSE) derruba o recall a FPR ≤ 1%
+   para 0,8389. Nenhum dos dois ramos pode ser removido sem custo.
+
+3. **A calibração do limiar é o gargalo, não o modelo.** O leave-one-family-out
+   mostra que os baselines perdem famílias inteiras quando a família sai da
+   calibração, enquanto os autoencoders mantêm recall 1,0000. Um modelo que
+   generaliza e um limiar mal calibrado produzem o mesmo sintoma: a família
+   inteira passa pelo detector sem alerta. Vale medir as duas coisas.
+
+4. **Escolher a métrica errada distorce a conclusão.** Com prevalência de 77,6%,
+   o F1 premia qualquer detector recall-maximizing. O recall a FPR ≤ 1%, o FPR
+   por perfil e a precisão esperada para prevalências realistas contam uma
+   história bem diferente — e é a história que se aproxima de tráfego real,
+   onde suspeitas são raras.
+
+5. **O gargalo real é a similaridade de molde, não a arquitetura.** A mediana
+   de Jaccard entre um normal do teste e algum normal do treino é 0,6364, e
+   os únicos falsos positivos são domínios `normal_hard` com aparência de hash
+   de CDN. Nenhum modelo aqui separa "normal com hash" de "túnel com hash" —
+   para isso é preciso um dataset com essa diversidade, não um modelo melhor.
+
+6. **O detector ainda não está pronto para produção, e isso está explícito.**
+   Com 1% de suspeitas, a precisão esperada do HybridAE cai para 0,5194; com
+   0,1%, para 0,0967. O trabalho entrega um **laboratório e um método
+   auditável**, não um produto. O que falta está no roadmap: dataset
+   regenerado, demonstração ao vivo ou em replay, e avaliação com múltiplas
+   seeds.
+
+### Casos de uso
+
+```mermaid
+flowchart LR
+    Autor["Autor da disciplina"] -->|monta o laboratório| Lab["Laboratório local<br/>Docker · .test"]
+    Autor -->|coleta e processa| Dados["Dataset e splits<br/>sem interseção de domínios"]
+    Autor -->|treina e calibra| Modelos["Autoencoders<br/>lexical · semântico · híbrido"]
+    Modelos -->|avalia| Resultados["results/evaluation/<br/>métricas e análise"]
+    Lab -->|tráfego sintético| DNS["Consultas DNS<br/>observadas pelo dashboard"]
+    Autor -->|apresenta| Demo["Demonstração<br/>ao vivo ou em replay"]
+    Resultados --> Demo
+    DNS --> Demo
+```
 
 ## Como reproduzir
 
@@ -776,7 +1027,7 @@ SixEyesDNS/
 │   ├── model/
 │   ├── evaluate/
 │   ├── test/
-│   ├── demo/
+│   ├── demo/           # reservado para a demonstração ao vivo/replay
 │   ├── lab/
 │   └── env/
 ├── source/
@@ -796,6 +1047,8 @@ SixEyesDNS/
 ├── results/
 │   ├── autoencoder-<modo>/
 │   └── evaluation/
+├── doc/
+│   └── info/            # requisitos da disciplina
 ├── docker-compose.yml
 ├── environment.yml
 ├── requirements.txt
@@ -816,7 +1069,39 @@ SixEyesDNS/
 
 ## Referência da disciplina
 
-O trabalho deve conter introdução, técnicas utilizadas, resultados, análise
-crítica e conclusões. A apresentação presencial terá 10 minutos nas datas
-08, 10 ou 15/12/2026, conforme a escolha registrada na planilha da turma. O
-texto deve estar disponível no repositório até 15/12/2026.
+O escopo exigido está em
+[doc/info/Descricao_do_Trabalho.md](doc/info/Descricao_do_Trabalho.md). O texto
+entregue neste README cobre as cinco partes do escopo escrito:
+
+| Parte exigida | Onde está |
+|---|---|
+| Introdução | [Introdução](#introdução) |
+| Desenvolvimento e técnicas | [Desenvolvimento e técnicas](#desenvolvimento-e-técnicas) |
+| Resultados | [Resultados](#resultados) |
+| Análise crítica | [Análise crítica](#análise-crítica) |
+| Conclusões | [Conclusões](#conclusões) |
+
+A apresentação presencial terá 10 minutos nas datas 08, 10 ou 15/12/2026,
+conforme a escolha registrada na planilha da turma. O texto deve estar
+disponível no repositório até 15/12/2026.
+
+### Fontes
+
+- **PyTorch** — treino e inferência dos autoencoders
+  ([pytorch.org](https://pytorch.org/)).
+- **scikit-learn** — Isolation Forest e padronização dos atributos
+  ([scikit-learn.org](https://scikit-learn.org/)).
+- **NumPy** e **Matplotlib** — cálculo numérico e figuras
+  ([numpy.org](https://numpy.org/), [matplotlib.org](https://matplotlib.org/)).
+- **Dnsmasq**, **BIND9**, **Unbound** e **ISC Kea** — serviços do laboratório
+  local ([dnsmasq.org](http://thekelleys.org.uk/dnsmasq/),
+  [isc.org](https://www.isc.org/bind/),
+  [nlnetlabs.nl](https://nlnetlabs.nl/projects/unbound/),
+  [kea.isc.org](https://kea.isc.org/)).
+- **Tranco** — ranking opcional de domínios populares, apenas se o arquivo
+  local for usado ([tranco.org](https://tranco.org/)). O projeto não baixa nem
+  versiona essa lista; sem o arquivo, o gerador funciona sem ela.
+
+Toda a linguagem de anomalias é gerada localmente pelo laboratório; nenhuma
+fonte externa de tráfego DNS é usada.
+
