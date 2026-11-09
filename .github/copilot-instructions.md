@@ -43,7 +43,9 @@ presuma que existam `src/`, `configs/` ou `source.generate_data`.
   codificadas geradas pelo laboratório.
 - Preserve splits sem interseção de domínios e falhe explicitamente em caso de
   sobreposição ou casamento ambíguo de rótulos.
-- Fixe seed 42 e mantenha execução em CPU como caminho suportado.
+- Fixe seed 42. O treino roda na GPU por padrão (`--device auto`) e cai para a
+  CPU automaticamente quando não há GPU disponível; a CPU também é um caminho
+  suportado quando forçada com `--device cpu`.
 - Compare autoencoder com limiar de entropia e Isolation Forest. Calibre
   limiares somente na validação e reporte precisão, recall, F1, ROC-AUC,
   matriz de confusão, FPR e limitações.

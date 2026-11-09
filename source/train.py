@@ -126,6 +126,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
+        "--early-stop-patience",
+        type=int,
+        default=EARLY_STOP_PATIENCE,
+        help="Épocas sem melhora na validação antes de parar "
+        f"(padrão: {EARLY_STOP_PATIENCE}); 0 desliga o early stopping",
+    )
+    parser.add_argument(
         "--device",
         default="auto",
         help="Dispositivo de treino: 'auto' (padrão; GPU NVIDIA/AMD com mais "
@@ -295,6 +302,7 @@ def main() -> None:
         or not 0 <= args.char_mask_prob < 1
         or args.numeric_noise_std < 0
         or args.pad_loss_weight < 0
+        or args.early_stop_patience < 0
     ):
         raise ValueError("Parâmetros de treino inválidos")
     device = resolve_device(args.device)
@@ -531,10 +539,13 @@ def main() -> None:
                 f"val_accuracy={history[-1]['validation_accuracy']:.4f}"
             )
             live_plot.update(history)
-        if epochs_without_improvement >= EARLY_STOP_PATIENCE:
+        if (
+            args.early_stop_patience != 0
+            and epochs_without_improvement >= args.early_stop_patience
+        ):
             print(
                 f"Early stopping na época {epoch}: "
-                f"{EARLY_STOP_PATIENCE} épocas sem melhora na validação."
+                f"{args.early_stop_patience} épocas sem melhora na validação."
             )
             break
     live_plot.close()
@@ -639,6 +650,7 @@ def main() -> None:
             "architecture": ARCHITECTURES[args.mode],
             "weight_decay": args.weight_decay,
             "pad_loss_weight": args.pad_loss_weight,
+            "early_stop_patience": args.early_stop_patience,
             "numeric_weight": args.numeric_weight,
             "mode": args.mode,
             "score_formula": (

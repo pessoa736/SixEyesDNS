@@ -12,6 +12,26 @@ Concluir o projeto individual da Unidade III de **Aprendizado Profundo
 O requisito acadêmico está em
 [doc/info/Descricao_do_Trabalho.md](doc/info/Descricao_do_Trabalho.md).
 
+## Estado atual
+
+A consolidação do laboratório, dos modelos, da avaliação e da documentação foi
+mergeada na branch `master` pela PR #1 (08/11/2026). O texto da disciplina está
+consolidado no [README](README.md), com introdução, técnicas, resultados, análise
+crítica e conclusões — as cinco partes do escopo escrito.
+
+```mermaid
+flowchart LR
+    F1["Fase 1<br/>Estrutura e schema"] --> F2["Fase 2<br/>Dados"]
+    F2 --> F3["Fase 3<br/>Modelos e avaliação"]
+    F3 --> F4["Fase 4<br/>Demonstração"]
+    F3 --> F5["Fase 5<br/>Relatório"]
+    F5 --> F6["Fase 6<br/>Dataset regenerado<br/>e múltiplas seeds"]
+    F4 --> F6
+```
+
+Fases 1 a 3 e o texto da Fase 5 estão concluídos. Restam a demonstração
+(Fase 4), a regeneração do dataset e a consolidação final.
+
 ## Diagnóstico concluído
 
 - [x] Confirmar que o repositório usa `source/`, não `src/`.
@@ -33,7 +53,7 @@ O requisito acadêmico está em
 
 ## Fase 1 — Estrutura e schema
 
-Status: implementada; modelos retreinados sem os indicadores de tipo DNS.
+Status: **concluída**; modelos retreinados sem os indicadores de tipo DNS.
 
 - [x] Trabalhar na branch `ajustes-u3`.
 - [x] Manter os módulos executáveis com `python -m source.<modulo>` nos
@@ -65,7 +85,7 @@ Status: laboratório, dataset sintético e alinhamento logs-rótulos
 implementados; a regeneração do dataset versionado depende de decisão.
 
 - [x] Corrigir o alinhamento entre logs e rótulos e documentar o tratamento de
-      execuções concatenadas e duplicatas (`source/process_raw.py`: casa por
+      execuções concatenadas e duplicadas (`source/process_raw.py`: casa por
       servidor-alvo, IP do gerador, janela de tempo e `(query, tipo)`; falha em
       rótulos concatenados ou conflitantes; relatório em `alignment.json`).
 - [x] Alinhar README, compose e scripts quanto a `QUERY_COUNT`,
@@ -99,17 +119,18 @@ implementados; a regeneração do dataset versionado depende de decisão.
 
 ## Fase 3 — Modelos, treino e avaliação
 
-Status: treino lexical, semântico (DenseAE) e híbrido, baselines e avaliação
-completa implementados; faltam a regeneração do dataset (decisão do autor) e a
-diversificação dos normais difíceis.
+Status: **concluída**; treino lexical, semântico (DenseAE) e híbrido, baselines
+e avaliação completa implementados. Restam a regeneração do dataset (decisão do
+autor) e a diversificação dos normais difíceis.
 
 - [x] Implementar `DenseAE` para 42 atributos e score MSE (modo `semantic`).
 - [x] Implementar submodelo lexical independente com tokens, convoluções e
       reconstrução de caracteres.
 - [x] Implementar `HybridAutoencoder` com score combinado CE/MSE.
 - [x] Implementar `source/train.py` com seed 42, Adam e treino somente com
-      exemplos normais; CPU como caminho de referência e GPU opcional
-      (`--device auto`: NVIDIA/CUDA ou AMD/ROCm, com fallback para CPU).
+      exemplos normais; GPU como caminho padrão e CPU como fallback automático
+      (`--device auto`: NVIDIA/CUDA ou AMD/ROCm, caindo para CPU quando não há
+      GPU disponível, sem erro e sem configuração).
 - [x] Permitir os modos `lexical`, `semantic` e `hybrid` por CLI.
 - [x] Permitir inicializar o encoder híbrido com o checkpoint lexical
       pré-treinado.
@@ -151,6 +172,8 @@ diversificação dos normais difíceis.
 - [x] Reorganizar `test-samples.png`: menos exemplos por figura, escala de
       cores comum, erro por caractere e numérico no híbrido e sem
       reconstrução textual no modo semântico.
+- [x] Versionar a avaliação completa em `results/evaluation/` (22 artefatos),
+      para que os números do README sejam verificáveis.
 - [ ] Diversificar os perfis normais difíceis e avaliar famílias não vistas
       para reduzir o FPR do lexical/híbrido no teste. Parcial: o
       leave-one-family-out já avalia famílias omitidas da calibração e o
@@ -160,7 +183,8 @@ diversificação dos normais difíceis.
 
 ## Fase 4 — Demonstração
 
-Status: dashboard pronto; demo do modelo pendente.
+Status: dashboard pronto; demo do modelo pendente. **É o maior gap entre o
+estado atual e a entrega.**
 
 - [ ] Criar `source/demo.py` usando a mesma normalização e features do treino.
 - [ ] Criar `scripts/demo.sh`.
@@ -177,33 +201,69 @@ Status: dashboard pronto; demo do modelo pendente.
       sessões, pesos, pausas e telemetria por site.
 - [x] Adicionar scripts de teste para pytest, checkpoint e geração de plots.
 
+### Plano da demonstração
+
+```mermaid
+flowchart TD
+    D1["source/demo.py<br/>reusa features e scoring do treino"] --> D2{"--replay<br/>ou ao vivo?"}
+    D2 -->|replay| D3["Lê log do dnsmasq<br/>sem depender do Docker"]
+    D2 -->|ao vivo| D4["Consulta o log em tempo real<br/>porta 6767 do host"]
+    D3 --> D5["Score · classificação<br/>mapa de erro por caractere"]
+    D4 --> D5
+    D5 --> D6["Saída para a apresentação<br/>10 minutos"]
+```
+
+Prioridade: o `--replay` vem antes do modo ao vivo. A apresentação não pode
+depender de daemon Docker funcionando na sala; o replay com um log gravado é
+determinístico e reproduzível.
+
 ## Fase 5 — Relatório e apresentação
 
-Status: documentação inicial concluída; consolidação final pendente.
+Status: **texto concluído** no README (introdução, técnicas, resultados,
+análise crítica e conclusões); falta o roteiro cronometrado e a lista de
+figuras.
 
-- [ ] Organizar o README com Introdução, Desenvolvimento/Técnicas, Resultados,
+- [x] Organizar o README com Introdução, Desenvolvimento/Técnicas, Resultados,
       Reprodução, Segurança/Ética e Referências.
-- [ ] Incluir somente números gerados e verificáveis; usar
-      `TODO(resultados)` enquanto faltarem.
-- [ ] Incluir pipeline e arquitetura híbrida em Mermaid.
-- [ ] Criar mapa Mermaid do fluxo de desenvolvimento (fases, branches e
+- [x] Incluir somente números gerados e verificáveis (as tabelas do README e
+      do `summary.md` foram conferidas célula a célula contra
+      `results/evaluation/metrics.csv`).
+- [x] Incluir pipeline e arquitetura híbrida em Mermaid (visão geral do
+      pipeline, fluxo de execução, arquiteturas comparadas, fluxo de
+      treinamento e casos de uso).
+- [x] Criar mapa Mermaid do fluxo de desenvolvimento (fases, branches e
       commits por fase).
-- [ ] Criar mapa Mermaid do fluxo de treinamento (dados, features, modos
+- [x] Criar mapa Mermaid do fluxo de treinamento (dados, features, modos
       lexical/semântico/híbrido, checkpoints e gráficos).
-- [ ] Criar mapa Mermaid da estrutura de classes (modelos, encoders,
+- [x] Criar mapa Mermaid da estrutura de classes (modelos, encoders,
       decoders e relações entre os módulos de `source/`).
-- [ ] Criar mapa Mermaid do fluxo de execução (processamento, split, treino,
+- [x] Criar mapa Mermaid do fluxo de execução (processamento, split, treino,
       avaliação e demo, de ponta a ponta).
-- [ ] Criar mapa Mermaid dos casos de uso (atores, laboratório local, treino,
+- [x] Criar mapa Mermaid dos casos de uso (atores, laboratório local, treino,
       avaliação, demonstração e apresentação).
 - [ ] Criar `docs/roteiro-apresentacao.md` para 10 minutos:
       introdução 1,5; pipeline 2; modelos 2; resultados 3; demo 1,5.
 - [ ] Listar as figuras necessárias para a apresentação.
-- [ ] Atualizar referências apenas para fontes realmente utilizadas.
+- [x] Atualizar referências apenas para fontes realmente utilizadas.
 - [x] Versionar os resultados gráficos dos treinamentos lexical, semântico e
       híbrido produzidos localmente.
 - [ ] Sugerir, sem executar, os comandos `gh repo edit` e criação da tag
       `entrega-u3` no dia da entrega.
+
+## Fase 6 — Robustez (nova)
+
+Status: planejada; depende da regeneração do dataset (Fase 2).
+
+- [ ] Regenerar e versionar `data/processed/` com o alinhamento corrigido
+      (10.000 linhas) em commit separado.
+- [ ] Retreinar os três modelos sobre o dataset regenerado e reavaliar.
+- [ ] Repetir o treino com múltiplas seeds para estimar variância e publicar
+      intervalos de confiança.
+- [ ] Avaliar mais de um split para medir a sensibilidade aos cortes.
+- [ ] Configurar CI no GitHub Actions (o repositório não tem workflow hoje; a
+      verificação é local, no `.venv-amd`).
+- [ ] Versionar `data/processed/alignment.json` junto com o dataset
+      regenerado.
 
 ## Critérios de aceitação
 
@@ -214,21 +274,22 @@ Status: documentação inicial concluída; consolidação final pendente.
       poucos minutos com o dataset versionado (100 épocas do híbrido: 121 s).
 - [x] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
       versionado.
-- [x] `pytest` passa.
+- [x] `pytest` passa (227 testes).
 - [x] Nenhuma feature usa `label`, `family`, `query_type`, `seed`, IP ou
       cliente.
 - [x] O README não contém métricas inventadas (as tabelas de resultados foram
       conferidas célula a célula contra `results/evaluation/metrics.csv`).
-- [ ] O texto cobre introdução, técnicas, resultados, análise crítica e
+- [x] O texto cobre introdução, técnicas, resultados, análise crítica e
       conclusões.
 - [ ] A demo funciona ao vivo ou em replay offline.
 
 ## Ordem de execução
 
-1. Corrigir estrutura e schema restantes.
-2. Corrigir e documentar o alinhamento dos dados.
-3. Implementar `DenseAE`, scoring, baselines e avaliação completa.
-4. Executar a suíte de testes no ambiente AMD/CPU configurado.
-5. Implementar a demonstração offline/local.
-6. Consolidar README, roteiro, métricas e figuras.
-7. Fazer revisão final antes da apresentação e do prazo do texto.
+1. Implementar a demonstração em replay (`source/demo.py` + `scripts/demo.sh`),
+   porque é o item que falta para a entrega e não depende de decisão do autor.
+2. Escrever `docs/roteiro-apresentacao.md` com os tempos de 10 minutos e a
+   lista de figuras.
+3. Decidir a regeneração do dataset; se aprovada, regerar, retreinar e
+   reavaliar em commits separados.
+4. Avaliar múltiplas seeds e configurar CI.
+5. Revisão final antes da apresentação e do prazo do texto.
