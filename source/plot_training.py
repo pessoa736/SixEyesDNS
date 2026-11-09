@@ -381,8 +381,14 @@ def verify_saved_scores(
         )
     if loaded is not None:
         fresh = loaded.score(rows)
-        if not np.allclose(scores, fresh, rtol=SCORE_TOLERANCE, atol=SCORE_TOLERANCE):
-            worst = int(np.argmax(np.abs(scores - fresh)))
+        # A tolerance e relativa a escala dos scores, como em evaluate.py: em
+        # GPU CUDA a reavaliacao nao e bit a bit identica ao treino (kernels e
+        # ordem das operacoes), e a diferenca cresce com o valor do score.
+        scale = max(1.0, float(np.abs(scores).max()))
+        limit = SCORE_TOLERANCE * scale
+        difference = np.abs(scores - fresh)
+        if float(difference.max()) > limit:
+            worst = int(np.argmax(difference))
             raise ValueError(
                 f"Os scores salvos de {split} não coincidem com a reavaliação do "
                 "checkpoint (ordem das linhas ou modelo diferentes): "
@@ -411,7 +417,9 @@ def verify_validation_threshold(
 ) -> None:
     """Confere que o limiar desenhado é o P99 dos scores normais da validação."""
     expected = percentile_threshold(validation_scores[validation_labels == 0])
-    if not np.isclose(threshold, expected, rtol=SCORE_TOLERANCE, atol=SCORE_TOLERANCE):
+    # tolerancia relativa a escala dos scores, como em verify_saved_scores
+    scale = max(1.0, float(np.abs(validation_scores).max()))
+    if abs(threshold - expected) > SCORE_TOLERANCE * scale:
         raise ValueError(
             f"O limiar salvo ({threshold:.4f}) não é o P{DEFAULT_PERCENTILE:g} dos "
             f"scores normais da validação ({expected:.4f})."
