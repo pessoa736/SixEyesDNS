@@ -1,6 +1,7 @@
 """Testes de treino de poucas épocas, checkpoints e escolha de dispositivo."""
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -87,3 +88,44 @@ def test_auto_device_falls_back_to_cpu_and_reports_it(
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     run_training(minimal_splits, tmp_path / "out", "semantic", epochs=1, device="auto")
     assert "Dispositivo selecionado: CPU" in capsys.readouterr().out
+
+
+def test_early_stop_patience_is_configurable(
+    minimal_splits: Path, tmp_path: Path
+) -> None:
+    """A paciencia do early stopping pode ser ajustada pela CLI."""
+    from source import train
+
+    argv = [
+        "train",
+        "--mode", "semantic",
+        "--splits-dir", str(minimal_splits),
+        "--output-dir", str(tmp_path / "out"),
+        "--epochs", "2",
+        "--batch-size", "32",
+        "--device", "cpu",
+        "--fresh",
+        "--no-live-plot",
+        "--no-gif",
+        "--early-stop-patience", "7",
+    ]
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "argv", argv)
+        train.main()
+
+    checkpoint = torch.load(tmp_path / "out" / "model.pt", map_location="cpu")
+    assert checkpoint["early_stop_patience"] == 7
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "argv", [*argv[:-1], "-1"])
+        with pytest.raises(ValueError, match="inválidos"):
+            train.main()
+
+
+def test_default_early_stop_patience_is_200() -> None:
+    from source.train import EARLY_STOP_PATIENCE, parse_args
+
+    assert EARLY_STOP_PATIENCE == 200
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "argv", ["train"])
+        assert parse_args().early_stop_patience == 200
