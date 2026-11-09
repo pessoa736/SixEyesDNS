@@ -99,7 +99,7 @@ def gpu_diagnosis() -> str | None:
     if amd_gfx_targets():
         return (
             "GPU AMD detectada, mas este PyTorch não tem suporte a ROCm; instale a "
-            "build ROCm (README, seção Treino em GPU)"
+            "build ROCm (README, seção Escolha do dispositivo)"
         )
     if Path("/dev/nvidiactl").exists():
         return "GPU NVIDIA detectada, mas este PyTorch não enxerga CUDA; confira driver e build"

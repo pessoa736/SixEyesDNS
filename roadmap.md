@@ -128,8 +128,9 @@ autor) e a diversificação dos normais difíceis.
       reconstrução de caracteres.
 - [x] Implementar `HybridAutoencoder` com score combinado CE/MSE.
 - [x] Implementar `source/train.py` com seed 42, Adam e treino somente com
-      exemplos normais; CPU como caminho de referência e GPU opcional
-      (`--device auto`: NVIDIA/CUDA ou AMD/ROCm, com fallback para CPU).
+      exemplos normais; GPU como caminho padrão e CPU como fallback automático
+      (`--device auto`: NVIDIA/CUDA ou AMD/ROCm, caindo para CPU quando não há
+      GPU disponível, sem erro e sem configuração).
 - [x] Permitir os modos `lexical`, `semantic` e `hybrid` por CLI.
 - [x] Permitir inicializar o encoder híbrido com o checkpoint lexical
       pré-treinado.

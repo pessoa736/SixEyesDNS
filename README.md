@@ -409,8 +409,10 @@ exemplos normais do treino:
    seed 42).
 
 O treinamento usa seed 42, early stopping com paciência fixa de 200 épocas e
-somente exemplos normais. A CPU é o caminho de referência para
-reprodutibilidade; a GPU é opcional (veja *Treino em GPU*). Os limiares são
+somente exemplos normais. **O treino roda na GPU por padrão** (`--device auto`):
+se houver uma GPU NVIDIA ou AMD disponível, ela é usada; se não houver, o
+processo cai para a CPU automaticamente, sem erro e sem configuração (veja
+*Escolha do dispositivo*). Os limiares são
 calculados na validação, incluindo percentil 99 dos normais e melhor F1
 supervisionado, sem escolher limiar no teste. O score híbrido usado no
 treinamento é:
@@ -517,7 +519,13 @@ flowchart TD
     T2 --> T3["StandardScaler<br/>ajustado só nos normais"]
     T3 --> T4["encode_domain<br/>64 posições · PAD + UNK"]
     T4 --> T5["source.train<br/>Adam · lr 1e-3 · weight_decay 1e-4<br/>batch 128 · seed 42"]
-    T5 --> T6["char_mask_prob 0.05<br/>numeric_noise_std 0.01<br/>pad_loss_weight 0.2"]
+    T5 --> T19["char_mask_prob 0.05<br/>numeric_noise_std 0.01<br/>pad_loss_weight 0.2"]
+    T5 --> T16{"--device auto<br/>há GPU visível?"}
+    T16 -->|sim| T17["Usa a GPU<br/>NVIDIA/CUDA ou AMD/ROCm<br/>com mais memória livre"]
+    T16 -->|não| T18["Cai para a CPU<br/>automaticamente, sem erro"]
+    T17 --> T6
+    T18 --> T6
+    T19 --> T6
     T6 --> T7["Época: treino → validação"]
     T7 --> T8{"Perda de validação<br/>melhorou?"}
     T8 -->|sim| T9["Salva checkpoint<br/>model_state + scaler +<br/>vocabulário + limiar"]
@@ -702,8 +710,9 @@ erradas de verdade.
   0,9920 nas famílias omitidas da calibração. Já o limiar de entropia perde
   `low_entropy` por completo (recall 0,0000 contra 0,4000 com todas as
   famílias) e o Isolation Forest cai de 1,0000 para 0,8020.
-- **Sem intervalos de confiança, uma única seed e um único split.** Os
-  treinos em GPU não são idênticos bit a bit aos da CPU.
+- **Sem intervalos de confiança, uma única seed e um único split.** O mesmo
+  comando roda na GPU ou na CPU conforme o hardware disponível, e treinos em
+  GPU não são idênticos bit a bit aos da CPU.
 - **Dataset versionado.** Foi gerado com o casamento antigo entre logs e
   rótulos (9.911 linhas); o alinhamento corrigido produz 10.000 linhas, mas
   mudaria os splits e invalidaria os checkpoints atuais. A regeneração depende
@@ -850,9 +859,10 @@ Para executar os três treinamentos em sequência:
 ./scripts/model/train-all.sh
 ```
 
-### Treino em GPU (local e NPAD)
+### Escolha do dispositivo (GPU por padrão, CPU automática)
 
-O treino usa `--device auto` por padrão e informa a escolha na primeira linha:
+O treino usa `--device auto` por padrão: **a GPU é sempre a primeira opção** e
+a CPU é o fallback automático. A escolha é informada na primeira linha:
 
 ```text
 Dispositivo selecionado: GPU AMD (ROCm/HIP 7.2.53211) cuda:0 - AMD Radeon RX 6600, 8 GB
@@ -860,17 +870,19 @@ Dispositivo selecionado: GPU NVIDIA (CUDA 13.2) cuda:1 - NVIDIA A100-SXM4-40GB, 
 Dispositivo selecionado: CPU (nenhuma GPU detectada)
 ```
 
-- **GPU NVIDIA (CUDA)**, como no NPAD, ou **GPU AMD (ROCm)**, como no PC local:
-  o modelo treina na GPU. Havendo mais de uma GPU visível, `auto` escolhe a que
-  tem mais memória livre no momento.
-- **Sem GPU no ambiente Linux:** cai para a CPU, que continua sendo o caminho
-  de referência para reprodutibilidade (seed 42; treinos em GPU podem diferir
-  numericamente da CPU).
+- **Com GPU NVIDIA (CUDA)**, como no NPAD, ou **GPU AMD (ROCm)**, como no PC
+  local: o modelo treina na GPU, sem nenhuma flag. Havendo mais de uma GPU
+  visível, `auto` escolhe a que tem mais memória livre no momento.
+- **Sem GPU no ambiente:** cai para a CPU **automaticamente**, sem erro e sem
+  configuração. Não é preciso flag, variável de ambiente nem script
+  alternativo — o mesmo comando funciona nos dois casos.
 - Se existir uma GPU no sistema que o PyTorch instalado não consegue usar, a
   linha da CPU explica o motivo (por exemplo, build CUDA em máquina AMD).
 
-A escolha pode ser forçada pela CLI (`--device cpu`, `--device cuda`,
-`--device cuda:1`) ou pela variável `DEVICE` dos wrappers:
+O fallback automático vale para o `source/train.py` e para os wrappers de
+`scripts/model/`, que já passam `--device auto` por padrão. A escolha pode ser
+forçada pela CLI (`--device cpu`, `--device cuda`, `--device cuda:N`) ou pela
+variável `DEVICE` dos wrappers:
 
 ```bash
 DEVICE=cpu ./scripts/model/train-hybrid.sh
@@ -879,6 +891,12 @@ DEVICE=cuda:1 ./scripts/model/train-hybrid.sh
 
 `python scripts/check_env.py` mostra a build do PyTorch, as GPUs visíveis e o
 dispositivo que `auto` escolheria.
+
+**Reprodutibilidade.** A seed é 42 em qualquer dispositivo, mas treinos em GPU
+não são idênticos bit a bit aos da CPU (ordem das operações e kernels
+diferentes). Para comparar execuções com bit a bit, force a CPU com
+`--device cpu` nos dois lados — é para isso que a suíte de testes usa CPU, e não
+por ser o caminho principal.
 
 **PC local com GPU AMD (RX 6600 XT, gfx1032).** O pacote `torch` do PyPI é a
 build CUDA e não enxerga placas AMD; o ambiente precisa da build ROCm do
@@ -947,7 +965,8 @@ limiares e métricas (P99, melhor F1, ROC-AUC, recall a FPR fixa, prevalência),
 os baselines, a escolha de dispositivo GPU/CPU, o treino de poucas épocas, a
 geração dos gráficos e a avaliação completa em um dataset mínimo sintético
 ([`tests/conftest.py`](tests/conftest.py)). Os testes que treinam modelos usam
-`--device cpu` para serem determinísticos em qualquer máquina.
+`--device cpu` para serem determinísticos em qualquer máquina — é uma escolha
+de teste, não o comportamento padrão do treino.
 
 O teste visual seleciona igualmente exemplos normais e suspeitos; use um valor
 par em `SAMPLES` ou `TEST_SAMPLES`.
