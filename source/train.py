@@ -129,7 +129,8 @@ def parse_args() -> argparse.Namespace:
         "--early-stop-patience",
         type=int,
         default=EARLY_STOP_PATIENCE,
-        help=f"Épocas sem melhora na validação antes de parar (padrão: {EARLY_STOP_PATIENCE})",
+        help="Épocas sem melhora na validação antes de parar "
+        f"(padrão: {EARLY_STOP_PATIENCE}); 0 desliga o early stopping",
     )
     parser.add_argument(
         "--device",
@@ -538,7 +539,10 @@ def main() -> None:
                 f"val_accuracy={history[-1]['validation_accuracy']:.4f}"
             )
             live_plot.update(history)
-        if epochs_without_improvement >= args.early_stop_patience:
+        if (
+            args.early_stop_patience != 0
+            and epochs_without_improvement >= args.early_stop_patience
+        ):
             print(
                 f"Early stopping na época {epoch}: "
                 f"{args.early_stop_patience} épocas sem melhora na validação."

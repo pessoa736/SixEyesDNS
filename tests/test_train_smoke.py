@@ -122,6 +122,36 @@ def test_early_stop_patience_is_configurable(
             train.main()
 
 
+def test_early_stop_patience_zero_disables_the_stop(
+    minimal_splits: Path, tmp_path: Path
+) -> None:
+    """Com paciencia 0 o treino roda todas as epocas, sem parar por early stopping."""
+    from source import train
+
+    argv = [
+        "train",
+        "--mode", "semantic",
+        "--splits-dir", str(minimal_splits),
+        "--output-dir", str(tmp_path / "out"),
+        "--epochs", "3",
+        "--batch-size", "32",
+        "--device", "cpu",
+        "--fresh",
+        "--no-live-plot",
+        "--no-gif",
+        "--early-stop-patience", "0",
+    ]
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "argv", argv)
+        train.main()
+
+    checkpoint = torch.load(tmp_path / "out" / "model.pt", map_location="cpu")
+    assert checkpoint["early_stop_patience"] == 0
+    history = json.loads((tmp_path / "out" / "history.json").read_text(encoding="utf-8"))
+    # as 3 epocas rodaram, mesmo sem melhorar a validacao
+    assert len(history) == 3
+
+
 def test_default_early_stop_patience_is_200() -> None:
     from source.train import EARLY_STOP_PATIENCE, parse_args
 
