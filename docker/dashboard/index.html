@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SixEyesDNS — laboratório</title>
+  <style>
+    body { background:#101827; color:#e5e7eb; font:16px system-ui,sans-serif; margin:0; }
+    main { max-width:1100px; margin:0 auto; padding:32px; }
+    h1 { margin-top:0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+    .card { background:#1f2937; border:1px solid #374151; border-radius:10px; padding:18px; }
+    .value { font-size:2rem; font-weight:700; color:#93c5fd; }
+    table { border-collapse:collapse; width:100%; margin-top:24px; }
+    th,td { border-bottom:1px solid #374151; padding:10px; text-align:left; }
+    .muted { color:#9ca3af; }
+    .chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; margin-top:24px; }
+    .chart-card { background:#1f2937; border:1px solid #374151; border-radius:10px; padding:18px; }
+    .chart-card h2 { margin:0 0 12px; font-size:1.05rem; }
+    svg { width:100%; height:240px; overflow:visible; }
+    .bar { fill:#60a5fa; }
+    .bar.backend { fill:#34d399; }
+    .bar.error { fill:#fb7185; }
+    .bar.suspeita { fill:#fb7185; }
+    .bar.normal { fill:#60a5fa; }
+    .legend { display:flex; gap:16px; font-size:12px; color:#9ca3af; margin-top:8px; }
+    .legend span::before { content:''; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; }
+    .legend .l-normal::before { background:#60a5fa; }
+    .legend .l-suspeita::before { background:#fb7185; }
+    .bar-label { fill:#d1d5db; font-size:11px; }
+    .bar-value { fill:#f9fafb; font-size:11px; font-weight:700; }
+    .axis { stroke:#4b5563; stroke-width:1; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>SixEyesDNS</h1>
+  <p class="muted">Dashboard local do tráfego sintético e defensivo.</p>
+  <section class="grid">
+    <div class="card"><div class="muted">Consultas</div><div id="queries" class="value">0</div></div>
+    <div class="card"><div class="muted">Normais</div><div id="normal" class="value">0</div></div>
+    <div class="card"><div class="muted">Suspeitas</div><div id="suspeita" class="value">0</div></div>
+    <div class="card"><div class="muted">Domínios únicos</div><div id="domains" class="value">0</div></div>
+    <div class="card"><div class="muted">Requisições backend</div><div id="backend-requests" class="value">0</div></div>
+    <div class="card"><div class="muted">Sites sintéticos</div><div id="synthetic-sites" class="value">0</div></div>
+    <div class="card"><div class="muted">Falhas DNS</div><div id="dns-failures" class="value">0</div></div>
+  </section>
+  <h2>Infraestrutura do laboratório</h2>
+  <table>
+    <thead><tr><th>Serviço</th><th>Endereço</th><th>Papel</th></tr></thead>
+    <tbody>
+      <tr><td>resolver</td><td>172.30.0.4</td><td>Resolvedor recursivo (Unbound) — porta de entrada dos clientes</td></tr>
+      <tr><td>dnsmasq</td><td>172.30.0.2</td><td>Autoritativo curinga (<code>*.test</code> → 172.30.0.11)</td></tr>
+      <tr><td>bind9</td><td>172.30.0.3</td><td>Autoritativo BIND9 (zona <code>test</code> e reversa <code>30.172.in-addr.arpa</code>)</td></tr>
+      <tr><td>dhcp</td><td>172.30.0.5</td><td>ISC Kea DHCPv4 (pool 172.30.0.100–199, DNS 172.30.0.4)</td></tr>
+      <tr><td>nginx</td><td>172.30.0.10</td><td>Este dashboard e os JSONs de telemetria</td></tr>
+      <tr><td>fake-services</td><td>172.30.0.11</td><td>Serviços e aplicações sintéticos de destino</td></tr>
+    </tbody>
+  </table>
+  <h2>Consultas por servidor DNS</h2>
+  <table>
+    <thead><tr><th>Servidor</th><th>Endereço</th><th>Peso</th><th>Consultas</th><th>Falhas</th></tr></thead>
+    <tbody id="dns-servers"></tbody>
+  </table>
+  <h2>Tráfego DNS</h2>
+  <table>
+    <thead><tr><th>Família</th><th>Consultas</th><th>Domínios únicos</th></tr></thead>
+    <tbody id="families"></tbody>
+  </table>
+  <section class="chart-grid">
+    <div class="chart-card">
+      <h2>Consultas DNS por família</h2>
+      <svg id="dns-chart" role="img" aria-label="Consultas DNS por família"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Consultas DNS por tipo</h2>
+      <svg id="type-chart" role="img" aria-label="Consultas DNS por tipo"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Consultas por minuto</h2>
+      <svg id="timeline-chart" role="img" aria-label="Consultas por minuto"></svg>
+      <div class="legend"><span class="l-normal">normal</span><span class="l-suspeita">suspeita</span></div>
+    </div>
+    <div class="chart-card">
+      <h2>Requisições por aplicação</h2>
+      <svg id="application-chart" role="img" aria-label="Requisições por aplicação"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Requisições por serviço</h2>
+      <svg id="service-chart" role="img" aria-label="Requisições por serviço"></svg>
+    </div>
+    <div class="chart-card">
+      <h2>Navegação por site sintético</h2>
+      <svg id="site-chart" role="img" aria-label="Navegação por site sintético"></svg>
+    </div>
+  </section>
+  <h2>Serviços falsos</h2>
+  <table>
+    <thead><tr><th>Serviço</th><th>Requisições</th><th>Latência média</th></tr></thead>
+    <tbody id="services"></tbody>
+  </table>
+  <h2>Aplicações falsas</h2>
+  <table>
+    <thead><tr><th>Aplicação</th><th>Requisições</th></tr></thead>
+    <tbody id="applications"></tbody>
+  </table>
+  <p id="updated" class="muted"></p>
+</main>
+<script>
+function drawBars(selector, entries, className) {
+  const svg = document.querySelector(selector);
+  const width = 480;
+  const height = 220;
+  const left = 112;
+  const top = 16;
+  const barHeight = 24;
+  const gap = 10;
+  const values = entries.map((entry) => entry[1]);
+  const max = Math.max(...values, 1);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.replaceChildren();
+  const axis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  axis.setAttribute('x1', left);
+  axis.setAttribute('x2', left);
+  axis.setAttribute('y1', top - 4);
+  axis.setAttribute('y2', top + entries.length * (barHeight + gap));
+  axis.setAttribute('class', 'axis');
+  svg.appendChild(axis);
+  entries.slice(0, 7).forEach(([name, value], index) => {
+    const y = top + index * (barHeight + gap);
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', left - 8);
+    label.setAttribute('y', y + 17);
+    label.setAttribute('text-anchor', 'end');
+    label.setAttribute('class', 'bar-label');
+    label.textContent = name.length > 16 ? name.slice(0, 15) + '…' : name;
+    svg.appendChild(label);
+    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bar.setAttribute('x', left + 4);
+    bar.setAttribute('y', y);
+    bar.setAttribute('width', Math.max((width - left - 28) * value / max, 2));
+    bar.setAttribute('height', barHeight);
+    bar.setAttribute('rx', 4);
+    bar.setAttribute('class', `bar ${className}`);
+    svg.appendChild(bar);
+    const count = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    count.setAttribute('x', left + 10 + (width - left - 28) * value / max);
+    count.setAttribute('y', y + 17);
+    count.setAttribute('class', 'bar-value');
+    count.textContent = value;
+    svg.appendChild(count);
+  });
+}
+
+function drawTimeline(selector, buckets) {
+  const svg = document.querySelector(selector);
+  const width = 480;
+  const height = 220;
+  const bottom = 24;
+  const top = 12;
+  const shown = buckets.slice(-30);
+  const max = Math.max(...shown.map((bucket) => bucket.queries), 1);
+  const slot = (width - 8) / Math.max(shown.length, 1);
+  const barWidth = Math.max(Math.min(slot - 3, 20), 2);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.replaceChildren();
+  const axis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  axis.setAttribute('x1', 0);
+  axis.setAttribute('x2', width);
+  axis.setAttribute('y1', height - bottom);
+  axis.setAttribute('y2', height - bottom);
+  axis.setAttribute('class', 'axis');
+  svg.appendChild(axis);
+  shown.forEach((bucket, index) => {
+    const x = 4 + index * slot + (slot - barWidth) / 2;
+    const usable = height - bottom - top;
+    const normalHeight = usable * (bucket.normal || 0) / max;
+    const suspeitaHeight = usable * (bucket.suspeita || 0) / max;
+    const normalBar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    normalBar.setAttribute('x', x);
+    normalBar.setAttribute('y', height - bottom - normalHeight);
+    normalBar.setAttribute('width', barWidth);
+    normalBar.setAttribute('height', normalHeight);
+    normalBar.setAttribute('class', 'bar normal');
+    svg.appendChild(normalBar);
+    const suspeitaBar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    suspeitaBar.setAttribute('x', x);
+    suspeitaBar.setAttribute('y', height - bottom - normalHeight - suspeitaHeight);
+    suspeitaBar.setAttribute('width', barWidth);
+    suspeitaBar.setAttribute('height', suspeitaHeight);
+    suspeitaBar.setAttribute('class', 'bar suspeita');
+    svg.appendChild(suspeitaBar);
+    if (index % 6 === 0 || index === shown.length - 1) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', x + barWidth / 2);
+      label.setAttribute('y', height - 8);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('class', 'bar-label');
+      label.textContent = bucket.minute.slice(11, 16);
+      svg.appendChild(label);
+    }
+  });
+}
+
+async function update() {
+  const response = await fetch('/traffic_summary.json?ts=' + Date.now());
+  if (!response.ok) return;
+  const data = await response.json();
+  const backendResponse = await fetch('/backend_traffic.json?ts=' + Date.now());
+  const backend = backendResponse.ok ? await backendResponse.json() : {total_requests: 0, services: {}, applications: {}};
+  const failures = data.failures || {};
+  const totalFailures = Object.values(failures).reduce((sum, count) => sum + count, 0);
+  document.querySelector('#queries').textContent = data.total_queries;
+  document.querySelector('#normal').textContent = data.labels.normal || 0;
+  document.querySelector('#suspeita').textContent = data.labels.suspeita || 0;
+  document.querySelector('#domains').textContent = data.unique_domains;
+  document.querySelector('#backend-requests').textContent = backend.total_requests || 0;
+  document.querySelector('#synthetic-sites').textContent = Object.keys(backend.sites || {}).length;
+  document.querySelector('#dns-failures').textContent = totalFailures;
+  const servers = data.servers || {};
+  document.querySelector('#dns-servers').innerHTML = (data.targets || [])
+    .map((target) => `<tr><td>${target.name}</td><td>${target.address}</td><td>${target.weight}</td><td>${servers[target.name] || 0}</td><td>${failures[target.name] || 0}</td></tr>`)
+    .join('');
+  document.querySelector('#families').innerHTML = Object.entries(data.families)
+    .map(([name, value]) => `<tr><td>${name}</td><td>${value.queries}</td><td>${value.unique_domains}</td></tr>`)
+    .join('');
+  document.querySelector('#services').innerHTML = Object.entries(backend.services || {})
+    .map(([name, value]) => {
+      const routes = Object.values(value.routes || {});
+      const latency = routes.length
+        ? routes.reduce((sum, route) => sum + route.average_latency_ms, 0) / routes.length
+        : 0;
+      return `<tr><td>${name}</td><td>${value.requests}</td><td>${latency.toFixed(2)} ms</td></tr>`;
+    })
+    .join('');
+  document.querySelector('#applications').innerHTML = Object.entries(backend.applications || {})
+    .map(([name, count]) => `<tr><td>${name}</td><td>${count}</td></tr>`)
+    .join('');
+  drawBars(
+    '#dns-chart',
+    Object.entries(data.families || {}).map(([name, value]) => [name, value.queries]).sort((a, b) => b[1] - a[1]),
+    ''
+  );
+  drawBars(
+    '#type-chart',
+    Object.entries(data.query_types || {}).sort((a, b) => b[1] - a[1]),
+    ''
+  );
+  drawTimeline('#timeline-chart', data.timeline || []);
+  drawBars(
+    '#application-chart',
+    Object.entries(backend.applications || {}).sort((a, b) => b[1] - a[1]),
+    'backend'
+  );
+  drawBars(
+    '#service-chart',
+    Object.entries(backend.services || {})
+      .map(([name, value]) => [name, value.requests])
+      .sort((a, b) => b[1] - a[1]),
+    'backend'
+  );
+  drawBars(
+    '#site-chart',
+    Object.entries(backend.sites || {}).sort((a, b) => b[1] - a[1]),
+    'backend'
+  );
+  document.querySelector('#updated').textContent = 'Atualizado em ' + data.updated_at;
+}
+update();
+setInterval(update, 2000);
+</script>
+</body>
+</html>

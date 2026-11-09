@@ -1,105 +1,76 @@
 # Instruções do Copilot — SixEyesDNS
 
-## Contexto do projeto
+## Contexto e fonte de verdade
 
-Este repositório contém o trabalho individual da Unidade III da disciplina
-**Aprendizado Profundo 2026.2**, categoria 7 — **Autoencoders para Anomalias e
-Ruído**.
+Este é o trabalho individual da Unidade III de **Aprendizado Profundo 2026.2**,
+categoria 7, sobre autoencoders para detecção de anomalias e ruído. Os
+requisitos da disciplina estão em [doc/info/Descricao_do_Trabalho.md](../doc/info/Descricao_do_Trabalho.md).
+O texto entregue deve ficar no README ou em PDF versionado; não invente métricas.
 
-O objetivo é detectar tunelamento e exfiltração de dados por DNS. O sistema
-deve aprender o comportamento de consultas normais com um autoencoder e usar o
-erro de reconstrução para sinalizar consultas suspeitas.
+Antes de alterar código, leia a implementação e os dados versionados. A
+estrutura real usa `source/`, `docker/generator/` e `docker-compose.yml`; não
+presuma que existam `src/`, `configs/` ou `source.generate_data`.
 
-## Entrada, saída e dados
+## Estado confirmado dos dados
 
-- Converter cada nome de domínio em atributos numéricos:
-  - tamanho total do nome;
-  - entropia de Shannon dos caracteres;
-  - proporção de dígitos;
-  - número de rótulos;
-  - tamanho do maior rótulo;
-  - frequências de caracteres.
-- Produzir a pontuação de anomalia, preferencialmente MSE, e o rótulo
-  `normal` ou `suspeita` com limiar ajustado na validação.
-- Treinar o autoencoder somente com dados normais.
-- Usar domínios sintéticos inspirados em serviços, plataformas e instituições
-  como dados normais, sempre em zonas reservadas como `.test`.
-- Gerar dados anômalos somente por scripts locais, codificando bytes aleatórios
-  em subdomínios com base32, hex, base64 e variações.
-- Separar treino, validação e teste sem vazamento entre conjuntos, domínios ou
-  famílias de exemplos.
-- Remover a zona artificial `.test` antes de calcular as features, para evitar
-  viés de distribuição quando o modelo receber domínios reais.
-- Não usar IP, cliente, perfil de risco ou qualquer metadado de origem como
-  entrada do modelo; o objetivo é analisar o domínio.
+- `data/processed/dataset.csv` tem 50.000 linhas e 58 colunas.
+- O schema atual tem `query`, 6 escalares, 36 frequências de caracteres,
+  7 indicadores de tipo DNS, 4 indicadores de família e os metadados
+  `query_type`, `family`, `label` e `seed`.
+- A parte lexical contém 42 atributos: tamanho, entropia, razão de dígitos,
+  quantidade de rótulos, maior rótulo, razão alfanumérica e 36 frequências.
+- `query` já é normalizada e não contém `.test`.
+- O gerador atual produz somente 126 domínios normais únicos, embora use
+  `QUERY_COUNT=50000`, `ANOMALY_RATE=0.5` e `SEED=42`.
+- Os splits atuais não compartilham domínios entre si, mas repetem muitos
+  registros dentro de cada split. O summary atual não detalha domínios por
+  classe e família.
+- O log versionado contém 60.000 consultas para 50.000 rótulos e inclui
+  execuções concatenadas. O casamento atual usa `(query, query_type)` e filas,
+  não timestamp. Não trate esse log como uma execução limpa sem verificar o
+  alinhamento.
 
-## Modelos e avaliação
+## Regras de dados e modelos
 
-- Implementar o autoencoder principal em PyTorch, com camadas densas pequenas.
-- Comparar com um limiar simples de entropia e Isolation Forest.
-- Avaliar generalização treinando com um tipo de codificação e testando com
-  outro, por exemplo base32 contra hex.
-- Reportar precisão, recall, F1, ROC-AUC, matriz de confusão, limiar usado e
-  taxa de falsos positivos.
-- Mostrar resultados honestos, incluindo falhas, limitações e possíveis casos
-  de falso positivo.
+- O autoencoder deve treinar somente com exemplos `normal`; `label`, `family`,
+  `query_type`, `seed`, IP e cliente são metadados, nunca features.
+- A única fonte da verdade para normalização e atributos deve ser reutilizada
+  por processamento, treino, avaliação e demo. Remova `.test` antes das
+  features.
+- Toda lista de features deve ser explícita e acompanhada de uma verificação
+  que rejeite metadados. Não use padrões como “todas as colunas menos label”.
+- Use apenas tráfego sintético e local em zonas `.test`; anomalias são strings
+  codificadas geradas pelo laboratório.
+- Preserve splits sem interseção de domínios e falhe explicitamente em caso de
+  sobreposição ou casamento ambíguo de rótulos.
+- Fixe seed 42 e mantenha execução em CPU como caminho suportado.
+- Compare autoencoder com limiar de entropia e Isolation Forest. Calibre
+  limiares somente na validação e reporte precisão, recall, F1, ROC-AUC,
+  matriz de confusão, FPR e limitações.
 
-## Estrutura preferida
+## Estrutura e convenções
 
-Manter, quando aplicável, esta organização:
+- Responda e documente em português; use nomes de variáveis e funções em inglês.
+- Use Python 3, tipagem, docstrings curtas e módulos executáveis com
+  `python -m source.<modulo>`.
+- Use argumentos de CLI e caminhos relativos; hiperparâmetros devem ficar em
+  configurações versionadas quando aplicável.
+- Use `random`, NumPy e PyTorch de forma determinística quando possível.
+- Prefira mudanças simples, legíveis e compatíveis com o código existente.
+- Antes de criar helper, procure reutilização em `source/` e scripts existentes.
+- Valide com os menores testes relevantes; não alegue que Docker ou a porta
+  `127.0.0.1:6767` funcionam sem testar.
+- Trabalhe na branch `ajustes-u3`, sem push ou force-push. Preserve alterações
+  não relacionadas e faça commits por fase, com prefixos `feat:`, `fix:`,
+  `docs:` ou `refactor:`, quando o usuário solicitar implementação.
 
-```text
-SixEyesDNS/
-├── README.md
-├── requirements.txt
-├── data/
-│   ├── raw/
-│   └── processed/
-├── source/
-│   ├── process_raw.py
-│   └── split_dataset.py
-├── scripts/
-├── results/
-└── docker/
-```
+## Segurança e documentação
 
-O laboratório local usa Docker com `dnsmasq` registrando consultas. A execução
-principal do treinamento e da avaliação deve ser feita por arquivos Python e
-shell, especialmente no NPAD; Jupyter é opcional.
-
-## Convenções de implementação
-
-- Responder e documentar em português.
-- Usar Python 3, tipagem e docstrings curtas.
-- Manter nomes de variáveis e funções em inglês.
-- Fixar sementes de `random`, `numpy` e `torch` quando o treinamento for
-  implementado.
-- Configurar scripts por argumentos de linha de comando; não usar caminhos
-  absolutos ou fixos no código.
-- Preferir soluções simples, legíveis e adequadas ao prazo curto.
-- Reutilizar `source/process_raw.py` e a mesma normalização de domínio para
-  evitar diferenças entre treino, avaliação e demonstração.
-- Antes de sugerir código novo, procurar a estrutura e os helpers existentes.
-- Validar mudanças com os testes, linters ou comandos de execução disponíveis.
-
-## Segurança e responsabilidade
-
-- Uso exclusivamente defensivo e educacional.
-- O tráfego de tunelamento deve ser sintético, gerado por scripts e mantido no
-  ambiente local.
-- Não enviar dados para servidores externos nem implementar exfiltração real,
-  persistência, evasão ou automação contra terceiros.
-- Não incluir credenciais, dados pessoais ou domínios reais sensíveis nos
-  exemplos e resultados.
-- Citar no `README.md` toda fonte, código ou dataset externo utilizado.
-- Sinalizar explicitamente qualquer sugestão que possa causar vazamento entre
-  treino e teste.
-
-## Como o Copilot deve ajudar
-
-- Sugerir primeiro a solução mais simples que cumpra o requisito.
-- Ao gerar código, respeitar a estrutura acima e explicar brevemente escolhas
-  relevantes de modelagem.
-- Preservar reprodutibilidade e registrar configurações importantes.
-- Ao alterar métricas ou limiares, indicar como a mudança afeta a comparação.
-- Não mascarar resultados ruins; ajudar a analisá-los de forma crítica.
+- O uso é exclusivamente defensivo e educacional. Não implemente exfiltração
+  real, persistência, evasão ou automação contra terceiros.
+- Não inclua credenciais, dados pessoais ou domínios reais sensíveis.
+- Cite somente fontes, bibliotecas e datasets realmente usados.
+- Números no README devem vir de arquivos gerados em `results/`; antes disso,
+  use `TODO(resultados)`.
+- Registre explicitamente riscos de vazamento entre treino e teste, falsos
+  positivos, limitações e decisões que dependam do usuário.

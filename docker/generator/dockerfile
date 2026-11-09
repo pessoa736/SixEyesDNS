@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir dnspython==2.7.0
 
+COPY external_domains.py .
 COPY gerador_queries.py .
 
 ENTRYPOINT ["python", "gerador_queries.py"]

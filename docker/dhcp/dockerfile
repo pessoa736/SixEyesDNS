@@ -1,0 +1,8 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache kea \
+	&& mkdir -p /var/log/kea /run/kea
+
+COPY kea-dhcp4.conf /etc/kea/kea-dhcp4.conf
+
+ENTRYPOINT ["kea-dhcp4", "-c", "/etc/kea/kea-dhcp4.conf"]

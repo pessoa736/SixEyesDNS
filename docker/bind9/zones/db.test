@@ -1,0 +1,12 @@
+$TTL 60
+@   IN  SOA ns1.test. admin.test. (
+        2026110801 ; serial
+        300        ; refresh
+        60         ; retry
+        604800     ; expire
+        60         ; minimum
+)
+        IN  NS  ns1.test.
+ns1     IN  A   172.30.0.3
+@       IN  A   172.30.0.11
+*       IN  A   172.30.0.11

@@ -17,22 +17,98 @@ services:
     networks:
       unlimited-void-net:
         ipv4_address: 172.30.0.2
+      lab-edge: null
+
+  bind9:
+    build: ./docker/bind9
+    volumes:
+      - ./data/raw/bind9:/var/log/named
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.3
+
+  resolver:
+    build: ./docker/resolver
+    depends_on:
+      - dnsmasq
+      - bind9
+    volumes:
+      - ./data/raw/resolver:/var/log/unbound
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.4
+
+  dhcp:
+    build: ./docker/dhcp
+    volumes:
+      - ./data/raw/dhcp:/var/log/kea
+    restart: always
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.5
+
+  fake-services:
+    build: ./docker/service-api
+    environment:
+      TRAFFIC_PATH: /data/dashboard/backend_traffic.json
+    volumes:
+      - ./data/raw:/data
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.11
+
+  backend-client:
+    build: ./docker/backend-client
+    depends_on:
+      - fake-services
+    environment:
+      SERVICE_HOST: fake-services
+      SERVICE_PORT: "8081"
+      REQUEST_INTERVAL: "0.5"
+      TRAFFIC_SEED: "${SEED:-42}"
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.7
+
+  nginx:
+    image: nginx:1.27.2-alpine
+    depends_on:
+      - fake-services
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/dashboard:/usr/share/nginx/html/dashboard:ro
+      - ./data/raw/dashboard:/var/www/dashboard-data:ro
+    networks:
+      unlimited-void-net:
+        ipv4_address: 172.30.0.10
 
   generator:
     build: ./docker/generator
     depends_on:
       - dnsmasq
+      - bind9
+      - resolver
     networks:
-      unlimited-void-net: null
+      unlimited-void-net:
+        ipv4_address: 172.30.0.6
     environment:
-      DNS_SERVER: dnsmasq
+      DNS_TARGETS: "resolver:70,dnsmasq:20,bind9:10"
       DNS_PORT: "53"
-      QUERY_COUNT: "50000"
-      QUERY_INTERVAL: "0.01"
-      SEED: "42"
-      ANOMALY_RATE: "0.5"
+      QUERY_COUNT: "${QUERY_COUNT:-10000}"
+      QUERY_INTERVAL: "${QUERY_INTERVAL:-0.01}"
+      SEED: "${SEED:-42}"
+      ANOMALY_RATE: "${ANOMALY_RATE:-0.5}"
+      TRANCO_PATH: "${TRANCO_PATH:-/external/tranco_top.csv}"
+      TRANCO_LIMIT: "${TRANCO_LIMIT:-2000}"
+      TRANCO_RATE: "${TRANCO_RATE:-0.15}"
+      DASHBOARD_PATH: /data/dashboard/traffic_summary.json
     volumes:
       - ./data/raw:/data
+      - ./data/external:/external:ro
 
 networks:
   unlimited-void-net:
@@ -40,4 +116,8 @@ networks:
     ipam:
       config:
         - subnet: 172.30.0.0/24
+  # Rede de borda nao interna: no Docker Desktop, portas publicadas de
+  # containers presos somente a rede interna nao chegam ao host.
+  lab-edge:
+    driver: bridge
       

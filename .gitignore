@@ -224,3 +224,12 @@ archive/
 
 # Dados gerados pelo laboratório DNS
 data/raw/
+
+# Fontes externas opcionais (ex.: Tranco); só o README do diretório é versionado
+data/external/*
+!data/external/README.md
+
+# Resultados locais e temporários do treinamento
+results/**/*.json
+# A avaliação final é versionada para que os números do README sejam verificáveis
+!results/evaluation/*.json
