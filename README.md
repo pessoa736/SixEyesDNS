@@ -713,6 +713,32 @@ erradas de verdade.
 - **Sem intervalos de confiança, uma única seed e um único split.** O mesmo
   comando roda na GPU ou na CPU conforme o hardware disponível, e treinos em
   GPU não são idênticos bit a bit aos da CPU.
+- **Capacidade do modelo contra o tamanho dos dados.** O CharAE tem 147.273
+  parâmetros e o HybridAE 152.179, para 3.482 domínios normais de treino —
+  cerca de 42 parâmetros por domínio. Isso é o terreno em que um autoencoder
+  decora os nomes normais em vez de aprender a distribuição deles. A medição
+  direta (FPR dos normais no treino contra a do teste, no limiar P99 da
+  validação) mostra que a memorização **não** domina:
+
+  | Modelo | FPR no treino | FPR na validação | FPR no teste | Razão teste/treino |
+  |---|---|---|---|---|
+  | CharAE | 0,0000 | 0,0014 | 0,0000 | — |
+  | DenseAE | 0,0046 | 0,0071 | 0,0027 | 0,58× |
+  | HybridAE | 0,0057 | 0,0114 | 0,0093 | 1,63× |
+
+  (limiar P99 da validação; fonte em
+  [`overfitting.csv`](results/evaluation/overfitting.csv), que traz também o
+  limiar de melhor F1 e os dois baselines.)
+
+  A razão de 1,63× do HybridAE é o sintoma real de sobreajuste — e ela é
+  pequena: o modelo erra 7 normais no teste contra 20 no treino. O CharAE não
+  mostra sinal nenhum (FPR zero nos dois). Ou seja: **a capacidade excessiva
+  existe, mas o overfitting é modesto**, porque o treino já usa realce
+  (`char_mask_prob 0.05`, `numeric_noise_std 0.01`) e ruído sobre as features.
+  O limite real do detector não é decorar os nomes, é a diversidade de
+  normais: todos os falsos positivos são `normal_hard` (hashes de CDN). É
+  por isso que a fonte Tranco e os perfis temáticos importam mais que
+  mexer na arquitetura.
 - **Dataset versionado.** Foi gerado com o casamento antigo entre logs e
   rótulos (9.911 linhas); o alinhamento corrigido produz 10.000 linhas, mas
   mudaria os splits e invalidaria os checkpoints atuais. A regeneração depende

@@ -123,7 +123,7 @@ class HybridAutoencoder(nn.Module):
 
     def __init__(
         self,
-        numeric_dim: int = 49,
+        numeric_dim: int = 42,
         vocabulary_size: int = 41,
         max_length: int = 64,
         latent_dim: int = 16,
