@@ -48,18 +48,24 @@ arquivo ensinam o autoencoder a reconstruir o túnel como legítimo. A adaptaç�
 separa domínios entre treino e validação, ajusta o scaler no treino, escolhe o
 melhor checkpoint pela validação e recalcula o P99 nela. Não produz acurácia de
 teste: isso exige dados independentes. Veja o [protocolo completo](doc/fine-tuning.md).
+A aba traz um log normal pronto para testar (`scripts/demo/normal-example.txt`,
+600 domínios únicos do laboratório).
 
 ![Fluxo da demonstração e da adaptação](doc/figures/demo.png)
 
 O repositório contém `app.py`, os checkpoints e os metadados do Space. Para
-publicar, crie um Space Gradio e envie a revisão escolhida:
+publicar, crie um Space Gradio, monte a pasta com só o que o app usa (código,
+checkpoints e exemplos, sem dados nem figuras) e envie-a com a CLI do Hub:
 
 ```bash
-git remote add space https://huggingface.co/spaces/<usuario>/<space>
-git push space HEAD:main
+./scripts/demo/space-bundle.sh        # gera build/space
+hf auth login                         # token do Hub, fora do repositório
+hf upload <usuario>/<space> build/space . --repo-type=space --exclude .space-bundle
 ```
 
-A publicação não é automática. Nenhum Space público é presumido neste README.
+Em vez de `git push`, que levaria o histórico inteiro com PNG, GIF e dados, o
+`hf upload` envia só a pasta gerada. A publicação não é automática. Nenhum Space
+público é presumido neste README.
 
 ### Replay offline no terminal
 
