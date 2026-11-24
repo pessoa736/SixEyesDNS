@@ -1,4 +1,3 @@
-import base64
 import csv
 import hashlib
 import json
@@ -20,6 +19,17 @@ from external_domains import (
     load_external_domains,
     pick_external_domain,
 )
+from traffic_profiles import (
+    ENVIRONMENTS,
+    PLATFORMS,
+    REGIONS,
+    SERVICES,
+    WORDS,
+    cdn_id_domain,
+    rare_word_domain,
+    uuid_like_domain,
+)
+from traffic_profiles import anomalous_domain as build_anomalous_domain
 
 
 DNS_PORT = int(os.getenv("DNS_PORT", "53"))
@@ -44,23 +54,6 @@ NORMAL_QUERY_WEIGHTS = (55, 20, 6, 4, 6, 5, 4)
 ANOMALY_QUERY_TYPES = ("TXT", "CNAME", "A", "AAAA", "MX", "NS")
 ANOMALY_QUERY_WEIGHTS = (45, 20, 20, 5, 5, 5)
 TIMELINE_MAX_MINUTES = 120
-SERVICES = ("web", "api", "catalog", "auth", "metrics", "mail", "cdn", "dashboard")
-REGIONS = ("us-east", "us-west", "eu-west", "sa-east", "ap-south", "br-south")
-ENVIRONMENTS = ("dev", "staging", "prod", "canary")
-PLATFORMS = ("atlas", "brisa", "cobalto", "lumen", "nuvem", "orbita", "pulsar")
-WORDS = (
-    "account",
-    "billing",
-    "health",
-    "events",
-    "images",
-    "login",
-    "orders",
-    "search",
-    "session",
-    "status",
-    "telemetry",
-)
 # Temas de entretenimento do laboratorio: memes classicos e Jujutsu Kaisen.
 MEMES = (
     "doge",
@@ -136,10 +129,6 @@ MEME_WORDS = (
 )
 
 
-def random_bytes(size: int = 18) -> bytes:
-    return bytes(RANDOM.randrange(256) for _ in range(size))
-
-
 def parse_targets() -> list[tuple[str, str, int]]:
     """Lê DNS_TARGETS no formato "nome:peso,nome:peso" e resolve os hosts."""
     raw = os.getenv("DNS_TARGETS", "").strip()
@@ -177,7 +166,7 @@ def normal_domain(index: int) -> tuple[str, str, str, str]:
     meme_word = MEME_WORDS[(index // 7) % len(MEME_WORDS)]
     character = JJK[(index // 11) % len(JJK)]
     term = JJK_TERMS[(index // 19) % len(JJK_TERMS)]
-    pattern = index % 16
+    pattern = index % 20
 
     if pattern == 0:
         return f"{service}.{platform}.test", "normal", service, "normal"
@@ -255,6 +244,12 @@ def normal_domain(index: int) -> tuple[str, str, str, str]:
             "jjk",
             "normal_jjk",
         )
+    if pattern in (16, 19):
+        return rare_word_domain(index // 2 if pattern == 19 else index)
+    if pattern == 17:
+        return cdn_id_domain(SEED, index)
+    if pattern == 18:
+        return uuid_like_domain(SEED, index)
     return (
         f"{meme}.{environment}.{platform}.test",
         "normal",
@@ -280,28 +275,7 @@ def external_name(domains: list[str], index: int) -> tuple[str, str, str, str]:
 
 def anomalous_domain(index: int) -> tuple[str, str, str, str]:
     """Gera somente famílias sintéticas para avaliação defensiva."""
-    family = ("base32", "hex", "base64", "low_entropy", "mixed")[index % 5]
-    service = SERVICES[index % len(SERVICES)]
-    if family == "low_entropy":
-        encoded = ("safe" * (3 + index % 4))[: 12 + index % 8]
-    elif family == "mixed":
-        encoded = (
-            base64.b32encode(random_bytes(6)).decode("ascii").rstrip("=").lower()
-            + f"-{index % 97}"
-        )
-    else:
-        payload = random_bytes(8 + (index % 5) * 4)
-        if family == "base32":
-            encoded = base64.b32encode(payload).decode("ascii").rstrip("=").lower()
-        elif family == "hex":
-            encoded = payload.hex()
-        else:
-            encoded = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
-    if family == "low_entropy":
-        domain = f"{encoded}.{service}.tunnel.test"
-    else:
-        domain = f"{encoded}.tunnel.test"
-    return domain, family, service, family
+    return build_anomalous_domain(RANDOM, index)
 
 
 def send_query(domain: str, query_type: str, address: str) -> str:
