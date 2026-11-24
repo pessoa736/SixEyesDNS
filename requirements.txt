@@ -5,4 +5,5 @@
 # Se o NPAD recomendar outra versão de CUDA, instale a variante dele no lugar.
 # dnspython é usado apenas dentro do container do gerador.
 torch==2.15.0
+gradio==6.32.0
 pytest==9.2.0
