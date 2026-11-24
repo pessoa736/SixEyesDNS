@@ -16,11 +16,11 @@ from source.scoring import load_checkpoint
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_LOG = REPO_ROOT / "scripts" / "demo" / "replay-example.txt"
 DNSMASQ_NORMAL = (
-    "Nov 20 10:00:00 dnsmasq[41]: query[A] Staging.Api.Orbita.test. "
+    "Nov 20 10:00:00 dnsmasq[41]: query[A] Canary.Mail.Cobalto.test. "
     "from 172.30.0.6"
 )
 DNSMASQ_ANOMALY = (
-    "Nov 20 10:00:01 dnsmasq[41]: query[TXT] aaj4pccnvdeac.tunnel.test "
+    "Nov 20 10:00:01 dnsmasq[41]: query[TXT] aen6dyl46u.eu-west.cdn.cobalto.test "
     "from 172.30.0.6"
 )
 BIND9_LINE = (
@@ -55,7 +55,7 @@ def test_read_replay_detects_formats_and_ignores_noise(tmp_path: Path) -> None:
     assert [query.entry.source for query in queries] == ["dnsmasq", "bind9", "unbound"]
     assert [query.line_number for query in queries] == [2, 3, 4]
     assert [query.features["query"] for query in queries] == [
-        "staging.api.orbita",
+        "canary.mail.cobalto",
         "web.atlas",
         "docs.brisa",
     ]

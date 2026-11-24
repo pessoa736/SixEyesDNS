@@ -247,9 +247,9 @@ def build_interface(model_dirs: Mapping[str, Path] | None = None) -> gr.Blocks:
         with gr.Tabs():
             with gr.Tab("Testar modelo"):
                 domain = gr.Textbox(
-                    value="staging.api.orbita.test",
+                    value="canary.mail.cobalto.test",
                     label="Domínio",
-                    placeholder="ex.: aaj4pccnvdeac.tunnel.test",
+                    placeholder="ex.: aen6dyl46u.eu-west.cdn.cobalto.test",
                     max_lines=1,
                 )
                 gr.Markdown(
@@ -259,10 +259,10 @@ def build_interface(model_dirs: Mapping[str, Path] | None = None) -> gr.Blocks:
                 analyze = gr.Button("Classificar consulta", variant="primary")
                 gr.Examples(
                     examples=[
-                        ["staging.api.orbita.test"],
-                        ["aaj4pccnvdeac.tunnel.test"],
-                        ["7c2a488f471558ea9c7d162f.tunnel.test"],
-                        ["f4bfff32c5.cdn.brisa.test"],
+                        ["canary.mail.cobalto.test"],
+                        ["aen6dyl46u.eu-west.cdn.cobalto.test"],
+                        ["assets-health-telemetry-media-assets.eu-west.web.lumen.test"],
+                        ["6222f8b896.cdn.nuvem.test"],
                     ],
                     inputs=[domain],
                     label="Exemplos do split de teste",
