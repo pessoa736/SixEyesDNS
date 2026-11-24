@@ -84,29 +84,24 @@ O roteiro e a lista de figuras já existem em
 ### 3. Dataset novo, retreino e reavaliação
 
 Decidido em 24/11/2026. Ordem: gerador, schema, regeneração e retreino, cada
-etapa em commit separado. Se não couber até 15/12, documentar a limitação e
-manter os números atuais, já conferidos.
+etapa em commit separado. O gerador já está pronto (itens no histórico da Fase
+2); falta o schema, a regeneração no laboratório e o retreino. Se não couber
+até 15/12, documentar a limitação e manter os números atuais, já conferidos.
+Uma prévia sem Docker mostrou que o gerador novo tira o teto (veja Hipótese do
+híbrido).
 
-- [ ] Tornar o tráfego sintético mais próximo de uma rede em funcionamento:
-      mais domínios normais distintos, perfis de cliente com ritmos diferentes,
-      anomalias mais difíceis (curtas, baseadas em palavras, a taxa baixa) e
-      prevalência de suspeitas mais realista (hoje 50% no dataset e 77,6% no
-      teste). Sem isso o CharAE chega a ROC-AUC 1 e os modelos não se separam.
-      É também o pré-requisito para comparar CharAE e híbrido sem efeito de
-      teto (ver Hipótese do híbrido).
-- [ ] Gerar as anomalias do dataset novo sob zonas e sufixos de aparência
-      normal, em vez de sempre `.tunnel`, e incluir normais com palavras raras,
-      para que o FPR não dependa de o trecho já ter sido visto.
-- [ ] Corrigir a família `low_entropy` do gerador: ela produz só **8 domínios
-      únicos** em 989 linhas (`"safe" * n` truncado, combinado com 8 serviços
-      em `docker/generator/gerador_queries.py:283-301`), cerca de 120
-      repetições cada, com 3 domínios na validação e 5 no teste. Variar a carga
-      para que o recall por família e o LOFO não dependam de 8 pontos.
+- [ ] Tornar o tráfego sintético mais próximo de uma rede em funcionamento.
+      **Já no gerador:** normais com ids de CDN em base32, identificadores
+      hexadecimais e ferramentas de infraestrutura pouco frequentes, e
+      anomalias `dictionary` e `short`. **Falta decidir:** a prevalência de
+      suspeitas (`ANOMALY_RATE`; hoje 0,5 no dataset e 77,6% no teste) e os
+      perfis de cliente com ritmos diferentes, que só importam para um ramo
+      comportamental, já que o timestamp não é feature.
 - [ ] Diversificar os perfis normais difíceis e avaliar famílias não vistas
       para reduzir o FPR do lexical/híbrido no teste. Parcial: o
       leave-one-family-out já avalia famílias omitidas da calibração e o
-      gerador ganhou normais temáticos e a fonte Tranco opcional; reduzir o FPR
-      do híbrido (7 domínios `normal_hard` no teste) exige regenerar o dataset
+      gerador ganhou normais temáticos, a fonte Tranco opcional, ids de CDN,
+      identificadores hexadecimais e palavras raras. Falta regenerar o dataset
       e retreinar, o que acompanha a regeneração decidida em 24/11/2026.
 - [ ] Separar features de metadados no `dataset.csv`: ele tem 59 colunas e
       grava `is_<tipo DNS>`, `is_family_*`, `query_type`, `family`, `profile`,
@@ -116,15 +111,23 @@ manter os números atuais, já conferidos.
       arquivo separado, elimina o risco de vazamento por construção. Fazer
       junto com a regeneração: muda o schema e os testes de `process_raw` e
       `split_dataset`.
-- [ ] Regenerar e versionar `data/processed/` com o alinhamento corrigido
-      (10.000 linhas) em commit separado.
+- [ ] Regenerar e versionar `data/processed/` com o gerador novo e o
+      alinhamento corrigido (10.000 linhas), em commit separado. Antes, decidir
+      `QUERY_COUNT` e `ANOMALY_RATE` (padrões 10000 e 0,5). Checado em
+      24/11/2026 sem subir nada: os containers de outro projeto
+      (`redes-de-computadores-2-*`) não publicam portas e a sub-rede
+      `172.30.0.0/24` e as portas 6767 e 8080 estão livres. Passos:
+      `./scripts/lab/docker-run.sh`, `docker compose wait generator` e
+      `./scripts/data/process-data.sh`.
 - [ ] Versionar `data/processed/alignment.json` junto com o dataset
       regenerado.
-- [ ] Retreinar os três modelos sobre o dataset regenerado e reavaliar.
-      Depois, reconferir célula a célula as tabelas do README, do
-      `results/evaluation/summary.md` e do roteiro contra
-      `results/evaluation/metrics.csv` (tolerância 5e-5): os números mudam
-      com o dataset novo.
+- [ ] Retreinar os três modelos sobre o dataset regenerado e reavaliar. Não
+      fixar poucas épocas: na prévia sem Docker o melhor ponto de validação foi
+      o limite de 800 épocas e o early stopping não disparou. Depois, reconferir
+      célula a célula as tabelas do README, do `results/evaluation/summary.md` e
+      do roteiro contra `results/evaluation/metrics.csv` (tolerância 5e-5) e
+      trocar os exemplos fixos que citam `.tunnel` (`source/gradio_demo.py`,
+      `scripts/demo/replay-example.txt`): os números mudam com o dataset novo.
 
 ### 4. Robustez e hipótese do híbrido
 
@@ -205,6 +208,14 @@ dizer (uma seed, um split, avaliação no teto):
   abaixo do do CharAE (0,8341). Os limiares são calibrados em escalas
   diferentes (4,41 e 3,14), então não dá para atribuir isso ao ramo numérico
   sem um controle.
+- Prévia sem Docker (24/11/2026; gerador novo, uma seed, 800 épocas, não
+  versionada): o teto some (ROC-AUC 0,9997 no CharAE e 0,9972 no híbrido) e o
+  CharAE fica à frente ou empatado em seis das sete famílias; a exceção é
+  `low_entropy` (recall por domínio de 0,989 contra 0,997). Em `short` são 0,963
+  contra 0,850. No híbrido, somar o erro numérico piora: o recall vai de 0,9891
+  (λ=0) a 0,9650 (λ=1) e 0,7444 (λ=4). O melhor ponto de validação foi o limite
+  de épocas e o early stopping não disparou, então a comparação não está
+  fechada.
 
 Para testar de verdade, veja o bloco 4 (várias seeds e um ramo com informação
 que não deriva do nome) e o bloco 3 (um dataset sem teto).
@@ -333,6 +344,16 @@ e ainda não foi feita (bloco 3).
       (múltiplos `--log`).
 - [x] Ampliar o dashboard com consultas por servidor, por tipo, por minuto,
       falhas DNS e tabela de infraestrutura.
+- [x] Gerar as anomalias sob zonas e sufixos de aparência normal, em vez de
+      sempre `.tunnel` (`docker/generator/traffic_profiles.py`): 70% imitam a
+      infraestrutura normal (`api.orbita`) e 30% usam uma zona própria
+      (`syncfeed`). Pronto no gerador; o dataset versionado ainda é o antigo.
+- [x] Corrigir a família `low_entropy` do gerador: o padrão repetido agora é
+      sorteado e a família passou de 8 domínios únicos em 989 linhas para 699
+      em 700 (`tests/test_traffic_profiles.py`). Foram criadas as famílias
+      `dictionary` (palavras do vocabulário normal) e `short` (payload curto), e
+      payloads longos podem ir em duas etiquetas. Pronto no gerador; falta
+      regenerar o dataset.
 
 ### Fase 3 — Modelos, treino e avaliação
 

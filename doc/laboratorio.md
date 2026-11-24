@@ -16,6 +16,27 @@ Variáveis principais: `QUERY_COUNT=10000`, `ANOMALY_RATE=0.5`, `SEED=42`,
 fica em `http://127.0.0.1:8080`; a consulta DNS publicada no host usa a porta
 `127.0.0.1:6767`.
 
+## Perfis do gerador
+
+`docker/generator/traffic_profiles.py` define o vocabulário e os perfis.
+
+- **Anomalias**, em 7 famílias (`base32`, `hex`, `base64`, `mixed`,
+  `low_entropy`, `dictionary` e `short`): o payload vai numa etiqueta ou dividido
+  em duas, sob uma zona que ora imita a infraestrutura normal (`api.orbita`), ora
+  é uma zona própria (`syncfeed`). Não há sufixo fixo. A `low_entropy` repete um
+  padrão sorteado e a `dictionary` monta o payload com palavras do vocabulário
+  normal.
+- **Normais difíceis:** ids de CDN em base32, identificadores hexadecimais,
+  ferramentas de infraestrutura pouco frequentes, hashes de CDN e os perfis
+  temáticos.
+- **Prevalência:** é parâmetro de execução (`ANOMALY_RATE`); o padrão do compose
+  continua 0,5.
+
+O dataset versionado em `data/processed/` foi gerado **antes** dessa mudança: nele
+todas as suspeitas terminam em `.tunnel` e a `low_entropy` tem 8 domínios únicos
+(veja `results/evaluation/suffix_control.csv`). Ele só passa a refletir o gerador
+novo quando for regenerado.
+
 ## Processamento
 
 `source/process_raw.py` casa cada rótulo com evidência no servidor-alvo por
