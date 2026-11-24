@@ -10,6 +10,11 @@ contém ``tunnel``. Dois testes separam o que o detector aprendeu:
 
 O limiar é o P99 gravado no checkpoint, o mesmo da tabela principal. Não há
 treino nem recalibração aqui: é só inferência.
+
+O controle vale para o dataset anterior (dataset-v1, até o commit 279358c do
+gerador). O gerador atual não usa sufixo fixo, então o dataset regenerado não
+tem ``.tunnel`` e o controle recusa rodar nele. O resultado medido fica em
+``results/archive/dataset-v1/suffix_control.csv``.
 """
 
 from __future__ import annotations
@@ -110,6 +115,11 @@ def run_control(model_dir: Path, system: str, splits_dir: Path) -> list[ControlR
     suspects = [row for row in test if row["label"] != "normal"]
     if not suspects:
         raise ValueError("O teste não tem suspeitas para o controle")
+    if not all(row["query"].endswith(f".{TUNNEL}") for row in suspects):
+        raise ValueError(
+            f"Nem todas as suspeitas terminam em .{TUNNEL}: o controle só se aplica "
+            "ao dataset-v1; o resultado está em results/archive/dataset-v1/"
+        )
     normals = list({row["query"]: row for row in test if row["label"] == "normal"}.values())
 
     swapped = features_of(
@@ -137,7 +147,9 @@ def main() -> None:
     parser.add_argument("--splits-dir", type=Path, default=Path("data/processed/splits"))
     parser.add_argument("--models-dir", type=Path, default=Path("results"))
     parser.add_argument(
-        "--output", type=Path, default=Path("results/evaluation/suffix_control.csv")
+        "--output",
+        type=Path,
+        default=Path("results/archive/dataset-v1/suffix_control.csv"),
     )
     args = parser.parse_args()
 

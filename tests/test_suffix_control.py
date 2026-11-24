@@ -34,6 +34,27 @@ def test_normal_suffixes_come_only_from_normals_and_are_deterministic() -> None:
         normal_suffixes([{"label": "suspeita", "query": "xyz.tunnel"}])
 
 
+def test_control_refuses_a_dataset_without_the_fixed_suffix(
+    trained_models: dict[str, Path], tmp_path: Path, minimal_splits: Path
+) -> None:
+    import csv
+    import shutil
+
+    splits = tmp_path / "splits"
+    shutil.copytree(minimal_splits, splits)
+    with (splits / "test.csv").open(newline="", encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+    for row in rows:
+        if row["label"] != "normal":
+            row["query"] = row["query"].replace(".tunnel", ".api.orbita")
+    with (splits / "test.csv").open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    with pytest.raises(ValueError, match="dataset-v1"):
+        run_control(trained_models["lexical"], "lexical", splits)
+
+
 def test_control_reports_all_four_experiments_with_consistent_counts(
     trained_models: dict[str, Path], minimal_splits: Path
 ) -> None:
