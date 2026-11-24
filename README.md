@@ -1,1152 +1,237 @@
+---
+title: SixEyesDNS
+short_description: Detecção educacional de túneis DNS com autoencoders
+sdk: gradio
+sdk_version: 6.32.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # SixEyesDNS
 
-Projeto educacional e defensivo da Unidade III de **Aprendizado Profundo
-2026.2**, categoria 7 — *Autoencoders para Anomalias e Ruído*. O objetivo é
-detectar consultas DNS suspeitas, representando somente o domínio e usando o
-erro de reconstrução de um autoencoder treinado com consultas normais.
-
-Os requisitos da disciplina estão em
-[doc/info/Descricao_do_Trabalho.md](doc/info/Descricao_do_Trabalho.md). O
-trabalho escrito será consolidado neste README.
+Detector educacional de consultas DNS anômalas com autoencoders. Projeto da
+Unidade III de **Aprendizado Profundo 2026.2**, categoria **Autoencoders para
+Anomalias e Ruído**. O [requisito da disciplina](doc/info/Descricao_do_Trabalho.md)
+está no repositório.
 
 ## Introdução
 
-Tunelamento DNS pode ocultar dados em nomes de domínio e dificultar a
-separação entre consultas legítimas e suspeitas. Este projeto implementa um
-laboratório local e isolado para estudar esse problema sem tráfego real:
-consultas normais são inspiradas em serviços, plataformas e instituições
-fictícias, enquanto as anomalias são strings codificadas geradas localmente.
+Tunelamento DNS pode esconder dados em nomes de domínio. O SixEyesDNS aprende a
+reconstruir consultas normais e usa o erro de reconstrução para sinalizar nomes
+fora do padrão. O laboratório gera somente tráfego sintético `.test`; nenhum
+servidor consulta a Internet.
 
-O sistema deve aprender a distribuição lexical das consultas normais e usar
-um limiar de erro para sinalizar `normal` ou `suspeita`. IP, cliente,
-perfil de risco, tipo DNS e qualquer outro metadado de origem não fazem parte
-do objetivo do modelo.
+O modelo analisa **somente o domínio**. IP, cliente, rótulo, família e tipo DNS
+são metadados, não features. Por isso trocar `A` por `TXT` sem mudar o domínio
+não altera o score — uma decisão contra atalhos como “TXT é suspeito”, não um
+bug da demonstração.
 
-## Estado verificado do repositório
+## Demonstração
 
-- O processamento está em `source/`, e o gerador está em
-  `docker/generator/gerador_queries.py`.
-- O dataset versionado (`data/processed/dataset.csv`) possui 9.911 registros
-  (e não 10.000), 59 colunas e 6.924 domínios únicos. Ele foi gerado pelo
-  método antigo de alinhamento entre logs e rótulos (veja "Alinhamento entre
-  logs e rótulos") e ainda não foi regenerado.
-- A parte lexical contém 42 atributos: 6 escalares e 36 frequências de
-  caracteres `a-z` e `0-9`.
-- O schema atual também contém indicadores de `query_type` e `family` (que
-  não entram no modelo), além dos metadados `query_type`, `family`,
-  `profile`, `label` e `seed`.
-- Os domínios processados não mantêm o sufixo artificial `.test`.
-- A nova geração amplia combinações determinísticas de serviços, regiões,
-  ambientes e plataformas, incluindo casos difíceis com subdomínios
-  semelhantes a identificadores de CDN.
-- Os splits atuais não compartilham domínios entre si, mas repetem registros
-  dentro dos próprios conjuntos: treino com 3.482 linhas e 2.049 domínios,
-  validação com 3.085 e 2.437, teste com 3.344 e 2.438 (valores de
-  `data/processed/splits/summary.json`, que também detalha domínios únicos por
-  classe e família). `source/split_dataset.py` falha em tempo de execução se
-  algum domínio aparecer em mais de um split.
-- Os logs do laboratório acumulam várias execuções (o `dnsmasq.log` local tem
-  25.253 linhas de consulta) e incluem consultas encaminhadas pelo resolvedor
-  e de outros clientes, enquanto o arquivo de rótulos (10.000 linhas, uma única
-  execução) é sobrescrito a cada coleta. Por isso o alinhamento não pode ser
-  sequencial: o método atual casa cada rótulo com uma linha do log do
-  servidor-alvo por cliente, consulta, tipo e janela de tempo. Verificação
-  local em 08/11/2026 (`data/raw/` não é versionado): 10.000 rótulos casaram
-  com 10.000 linhas de log (dnsmasq 2.047, bind9 1.007, resolver 6.946), sem
-  rótulos sem log e sem linhas extras; o comando e os detalhes estão em
-  "Alinhamento entre logs e rótulos".
-- Reprocessar essa coleta com o método atual não reproduz o dataset
-  versionado. Os 6.924 domínios únicos são os mesmos, mas o método antigo
-  perdeu 89 consultas normais e 817 das suas 9.911 linhas têm um par
-  (domínio, tipo) que não consta nos rótulos atuais. Como a ordem das linhas
-  muda, o split com a mesma seed também muda (320 dos domínios do novo teste
-  estavam no treino do split versionado). **Decisão pendente:** regenerar
-  `data/processed/` invalida os checkpoints e a release `hybrid-v1` atuais.
+### Gradio e Hugging Face Space
 
-Essas observações são diagnóstico, não resultados de desempenho. A avaliação
-final, com métricas verificáveis, está na seção "Resultados".
+```bash
+./scripts/demo/gradio.sh
+# http://127.0.0.1:7860
+```
 
-### Estado da branch principal
+A interface oferece duas operações:
 
-A branch `master` recebeu a consolidação do laboratório, dos modelos, da
-avaliação e da documentação pela PR #1 (merge em 08/11/2026). O roadmap
-atualizado está em [`roadmap.md`](roadmap.md), e o texto da disciplina segue
-neste README.
+- **Testar modelo:** escolher HybridAE, CharAE ou DenseAE, informar um domínio e
+  ver score, limiar P99, heatmap por caractere e erros por atributo.
+- **Fine-tuning com log normal:** adaptar uma cópia do checkpoint com dnsmasq,
+  BIND9 ou Unbound e baixar o novo `model.pt`.
+
+O log de adaptação precisa conter **somente normais confirmados**. Anomalias no
+arquivo ensinam o autoencoder a reconstruir o túnel como legítimo. A adaptação
+separa domínios entre treino e validação, ajusta o scaler no treino, escolhe o
+melhor checkpoint pela validação e recalcula o P99 nela. Não produz acurácia de
+teste: isso exige dados independentes. Veja o [protocolo completo](doc/fine-tuning.md).
+
+![Fluxo da demonstração e da adaptação](doc/figures/demo.png)
+
+O repositório contém `app.py`, os checkpoints e os metadados do Space. Para
+publicar, crie um Space Gradio e envie a revisão escolhida:
+
+```bash
+git remote add space https://huggingface.co/spaces/<usuario>/<space>
+git push space HEAD:main
+```
+
+A publicação não é automática. Nenhum Space público é presumido neste README.
+
+### Replay offline no terminal
+
+A classificação de logs, separada do fine-tuning, continua disponível sem Docker:
+
+```bash
+./scripts/demo/demo.sh
+LIMIT=2 ./scripts/demo/demo.sh
+REPLAY_LOG=data/raw/dnsmasq/dnsmasq.log LIMIT=20 ./scripts/demo/demo.sh
+```
+
+O exemplo versionado contém nove consultas do teste e inclui um falso positivo
+conhecido. Use `--json` para obter o relatório completo.
 
 ## Desenvolvimento e técnicas
 
-### Visão geral do pipeline
-
-```mermaid
-flowchart TD
-    A["Laboratório local<br/>Docker · zona .test"] --> B["Gerador<br/>QUERY_COUNT · ANOMALY_RATE · SEED"]
-    B --> C["query_labels.csv<br/>sequence · timestamp · server"]
-    B --> D["Logs DNS<br/>dnsmasq · BIND9 · Unbound"]
-    C --> E["source.process_raw<br/>casamento por servidor, cliente,<br/>consulta, tipo e janela"]
-    D --> E
-    E -->|falha em conflito ou falta de evidência| F["Erro explícito<br/>dataset não é gravado"]
-    E --> G["dataset.csv<br/>42 features + 11 indicadores + 6 metadados<br/>9.911 linhas · 6.924 domínios"]
-    G --> H["source.split_dataset<br/>seed 42 · sem interseção de domínios"]
-    H --> I["train.csv<br/>3.482 linhas · só normais"]
-    H --> J["validation.csv<br/>3.085 linhas"]
-    H --> K["test.csv<br/>3.344 linhas"]
-    I --> L["source.train<br/>--mode lexical|semantic|hybrid"]
-    J --> L
-    L --> M["model.pt<br/>checkpoint + scaler + vocabulário + limiar"]
-    M --> N["source.evaluate<br/>P99 e melhor F1 na validação"]
-    K --> N
-    N --> O["results/evaluation/<br/>métricas · ablation · lofo<br/>prevalence · leakage · explain"]
-    M --> P["source.plot_training<br/>perdas · scores · confusões<br/>amostras · espaço latente"]
-```
-
-### Visão geral do fluxo de execução
-
-```mermaid
-sequenceDiagram
-    actor Autor
-    participant Gerador
-    participant DNS as "Servidores DNS"
-    participant Processador
-    participant Treino
-    participant Avaliacao
-
-    Autor->>Gerador: ./scripts/lab/docker-run.sh
-    Gerador->>DNS: consultas normais e suspeitas (multi-servidor)
-    DNS-->>Gerador: logs acumulados por execução
-    Gerador->>Processador: rótulos (sequence, timestamp, server)
-    Autor->>Processador: ./scripts/data/process-data.sh
-    Processador->>DNS: lê os logs de cada servidor-alvo
-    Processador->>Processador: casa por servidor, cliente, consulta, tipo e janela
-    Processador-->>Autor: dataset.csv + alignment.json (ou falha explícita)
-    Autor->>Treino: ./scripts/model/train-all.sh
-    Treino->>Treino: treina só com normais, seed 42
-    Treino-->>Autor: model.pt e figuras em results/autoencoder-<modo>/
-    Autor->>Avaliacao: ./scripts/evaluate/evaluate.sh
-    Avaliacao->>Avaliacao: calibra limiares na validação
-    Avaliacao-->>Autor: results/evaluation/ (22 artefatos)
-```
-
-### Laboratório e dados
-
-O laboratório usa Docker em uma rede interna (`172.30.0.0/24`) com quatro
-serviços de infraestrutura de rede:
-
-- `resolver` (Unbound, 172.30.0.4): resolvedor recursivo, porta de entrada
-  dos clientes; encaminha a zona `test.` para os autoritativos e a reversa
-  `30.172.in-addr.arpa` para o BIND9;
-- `dnsmasq` (172.30.0.2): autoritativo curinga, responde `#` → 172.30.0.11;
-- `bind9` (172.30.0.3): autoritativo BIND9 para a zona `test.` (curinga →
-  172.30.0.11) e para a zona reversa, com PTRs dos serviços do laboratório;
-- `dhcp` (ISC Kea, 172.30.0.5): DHCPv4 de cenário para a sub-rede, com pool
-  172.30.0.100–199 e DNS 172.30.0.4; em rede Docker interna não há clientes
-  de broadcast reais, mas o serviço sobe e registra leases.
-
-O gerador lê três variáveis de ambiente, que o `docker-compose.yml` expõe com
-estes padrões e que podem ser sobrescritas ao subir o laboratório (veja
-"Coleta local"):
-
-| Variável | Padrão | Função |
-| --- | --- | --- |
-| `QUERY_COUNT` | `10000` | consultas enviadas por execução |
-| `ANOMALY_RATE` | `0.5` | fração de consultas suspeitas |
-| `SEED` | `42` | semente do gerador e do tráfego dos backends (`TRAFFIC_SEED`) |
-
-O `./scripts/data/process-data.sh` lê a mesma variável `SEED` (padrão `42`)
-como semente do split por domínio.
-
-O tráfego deve permanecer local, usando a zona reservada `.test`; nenhum
-servidor possui upstream externo. O gerador distribui as consultas pelos
-servidores segundo `DNS_TARGETS` (padrão `resolver:70,dnsmasq:20,bind9:10`),
-com tipos ponderados por classe: normais dominam em `A`/`AAAA` e incluem
-consultas reversas `PTR`, enquanto anomalias concentram-se em `TXT`/`CNAME`,
-como em túneis DNS. O intervalo entre consultas (`QUERY_INTERVAL`, padrão
-`0.01` s) tem jitter determinístico (0,5–1,5× o valor configurado).
-
-As famílias anômalas atuais são:
-
-- base32;
-- hexadecimal;
-- base64 URL-safe;
-- baixa entropia;
-- codificações mistas.
-
-O gerador normal usa combinações determinísticas de serviços fictícios
-(`web`, `api`, `catalog`, `auth`, `metrics`, `mail`, `cdn` e `dashboard`),
-regiões, ambientes e plataformas. Também produz casos difíceis com labels
-curtos, índices de nós, identificadores hash-like e prefixos hexadecimais
-curtos estilo CDN (`profile=normal_hard`), consultas reversas PTR
-(`profile=normal_reverse`) e tráfego temático de entretenimento: memes
-clássicos (`doge`, `nyancat`, `rickroll`, `thisisfine`...) em
-`profile=normal_meme` e referências a Jujutsu Kaisen (`gojo`, `sukuna`,
-`domain-expansion`, `hollow-purple`...) em `profile=normal_jjk`, sempre na
-zona `.test`. Esses casos mantêm `family=normal` e servem para medir falsos
-positivos em domínios fora do padrão corporativo.
-
-Opcionalmente, um ranking local de domínios populares (Tranco) alimenta o
-perfil `normal_tranco`: o arquivo `rank,domain` fica em
-`data/external/tranco_top.csv`, é ignorado pelo Git e nunca é baixado nem
-versionado pelo projeto (veja
-[data/external/README.md](data/external/README.md)). O gerador usa até
-`TRANCO_LIMIT` domínios (padrão `2000`) em uma fração `TRANCO_RATE` (padrão
-`0.15`) das consultas normais que não são `PTR`, sempre como `<domínio>.test`:
-o nome real é só texto dentro do laboratório e nenhuma consulta sai para a
-Internet. A escolha é determinística por hash de `(SEED, índice)` e não
-consome o gerador pseudoaleatório principal; sem o arquivo, o perfil fica
-desligado e o tráfego gerado não muda. Se o arquivo for usado, a fonte e a
-versão da lista devem ser citadas.
-
-O arquivo de rótulos registra sequência, timestamp UTC, serviço, perfil
-gerador e servidor DNS de destino para auditoria do laboratório; esses campos
-são metadados e não entram no modelo. Consultas respondidas pelo cache do
-resolvedor não chegam aos autoritativos, mas o Unbound registra todas as
-consultas dos clientes (`log-queries`); por isso cada rótulo é confirmado no
-log do seu servidor-alvo (coluna `server`). O arquivo de rótulos é
-sobrescrito a cada execução, enquanto os logs DNS acumulam execuções.
-
-O laboratório também sobe um Nginx em `127.0.0.1:8080`, serviços fictícios,
-aplicações backend sintéticas e um dashboard local. As aplicações
-`web-frontend`, `event-worker` e `monitor-agent` fazem requisições internas
-para os serviços de catálogo, autenticação, eventos, busca e métricas. O
-dashboard mostra consultas DNS e requisições backend por aplicação, serviço,
-rota, status e latência. Os dados ficam em
-`data/raw/dashboard/traffic_summary.json` e
-`data/raw/dashboard/backend_traffic.json`.
-Além das tabelas, a interface possui gráficos SVG de consultas por família
-DNS, por tipo de consulta e por minuto (normais e suspeitas empilhadas),
-requisições por aplicação e requisições por serviço, atualizados a cada dois
-segundos sem dependências externas. Uma tabela de infraestrutura lista os
-serviços do laboratório com endereços e papéis, e outra mostra consultas,
-pesos e falhas por servidor DNS.
-
-Para aproximar padrões orgânicos sem acessar a Internet, os clients navegam
-somente por sites sintéticos `.test`, com pesos de popularidade, sessões de
-2–6 páginas, pausas variáveis, user agents fictícios, períodos de leitura e
-variação entre aplicações. Os sites são `portal.atlas.test`,
-`docs.brisa.test`, `status.cobalto.test`, `shop.lumen.test` e
-`news.nuvem.test`. A telemetria também registra a distribuição por site.
-
-#### Alinhamento entre logs e rótulos
-
-O arquivo de rótulos (`data/raw/query_labels.csv`) é sobrescrito a cada
-execução do gerador, mas os logs do dnsmasq, do BIND9 e do Unbound acumulam
-execuções. Os autoritativos também registram as consultas que o resolvedor
-encaminha (cliente `172.30.0.4`) e as de outros clientes, como o DHCP Kea
-(`172.30.0.5`). Casar logs e rótulos por posição, ou só por `(consulta, tipo)`,
-mistura execuções e clientes: o `dnsmasq.log` local, por exemplo, guarda 10.000
-consultas de outro cliente (`172.30.0.3`) feitas entre 00:49 e 00:51 de
-08/11, anteriores à execução atual. Por isso `source/process_raw.py` trata os
-logs somente como **evidência** e grava **uma linha por rótulo confirmado**,
-em ordem de `sequence`:
-
-1. cada rótulo é procurado no log do seu servidor-alvo (coluna `server`:
-   `dnsmasq` → `dnsmasq.log`, `bind9` → `queries.log`, `resolver` →
-   `unbound.log`). O formato de cada linha é detectado por expressão regular;
-   no Unbound valem só as linhas de consulta, não as de resposta;
-2. a linha precisa vir do cliente `--client-ip` (padrão `172.30.0.6`, o
-   gerador), ter a mesma consulta normalizada (minúsculas, sem ponto final) e o
-   mesmo tipo, e ter timestamp em `[rótulo − --tolerance-seconds, rótulo + 1 s]`
-   (padrão de 5 s): o rótulo é gravado depois da resposta, e o dnsmasq e o
-   Unbound truncam o log ao segundo;
-3. o casamento é guloso em ordem temporal por chave (servidor, consulta, tipo)
-   e cada linha de log confirma no máximo um rótulo;
-4. o dnsmasq não registra o ano: usa-se o ano dos rótulos, inclusive na virada
-   de ano;
-5. linhas de outros clientes (inclusive o resolvedor nos autoritativos),
-   linhas do gerador fora da janela da execução (outras execuções acumuladas no
-   log) e linhas extras dentro da janela (retransmissões ou consultas sem
-   rótulo) são ignoradas e apenas contadas. Como só rótulos geram linhas no
-   dataset, duplicatas no log nunca criam registros.
-
-O processamento falha com mensagem em português e código de saída diferente de
-zero, sem gravar o dataset, quando:
-
-- o arquivo de rótulos parece concatenado: `sequence` repetida ou timestamps
-  decrescentes na ordem de `sequence`. Lacunas em `sequence` não indicam
-  concatenação e são toleradas (veja abaixo);
-- a mesma `(consulta, tipo)` tem rótulos conflitantes (`label`, `family` ou
-  `profile` diferentes), o que tornaria o casamento ambíguo;
-- há rótulos sem linha de log acima de `--max-missing-ratio` (padrão `0`:
-  qualquer rótulo sem evidência falha). Com um valor maior, esses rótulos são
-  descartados do dataset e contados no relatório. Se o BIND9 rotacionar o log
-  durante a coleta, inclua também os arquivos rotacionados em `--log`;
-- faltam colunas obrigatórias nos rótulos (`sequence`, `timestamp`, `query`,
-  `query_type`, `family`, `profile`, `label`, `seed` e `server`), o servidor é
-  desconhecido ou duas execuções se sobrepõem no tempo.
-
-O gerador não grava rótulo para uma consulta que falhou (por exemplo, por
-timeout), mas o número de `sequence` dela é consumido. Portanto, lacunas em
-`sequence` são consultas que falharam no gerador, e uma única falha não derruba
-a coleta: as lacunas são toleradas e reportadas. `sequence_gaps` conta os
-números ausentes entre 0 e o último `sequence` e aparece, junto de
-`first_sequence` e `last_sequence`, por execução no `alignment.json` e no
-resumo impresso. A linha de log de uma consulta que falhou, se o servidor a
-registrou, entra como extra na janela e não gera registro. A opção
-`--strict-sequence` (desligada por padrão) restaura a exigência de `sequence`
-contígua em `0..N-1`: com ela, qualquer lacuna falha.
-
-Cada arquivo de `--labels` é tratado como **uma** execução e validado
-individualmente; vários arquivos (e vários `--log`) são aceitos, cada
-execução com a sua janela de tempo. O schema de saída não muda: `server`,
-`sequence` e `timestamp` servem só ao alinhamento e não entram no dataset.
-
-O relatório `alignment.json` fica por padrão ao lado do `--output`
-(`--report` altera o caminho) e o `process-data.sh` o grava em
-`data/processed/alignment.json`. Ele registra os totais de rótulos, linhas
-escritas, rótulos sem log e lacunas de `sequence`, os casados por servidor, as
-opções usadas (`client_ip`, `tolerance_seconds`, `max_missing_ratio` e
-`strict_sequence`) e, por execução, a janela (início e fim) e `first_sequence`,
-`last_sequence` e `sequence_gaps`. Registra também as contagens de linhas de
-log: lidas por fonte, de outros clientes (também por IP), fora da janela e
-extras dentro da janela.
-
-Verificação local em 08/11/2026 sobre os dados de `data/raw/` (não
-versionados), com a saída fora de `data/processed/` para não sobrescrever o
-dataset versionado:
-
-```bash
-python -m source.process_raw \
-  --log data/raw/dnsmasq/dnsmasq.log data/raw/bind9/queries.log \
-        data/raw/resolver/unbound.log \
-  --labels data/raw/query_labels.csv \
-  --output <diretório temporário>/dataset.csv
-```
-
-Resultado: 10.000 rótulos e 10.000 linhas escritas (dnsmasq 2.047, bind9
-1.007, resolver 6.946), com 0 rótulos sem log, 0 linhas extras na janela e
-`sequence` de 0 a 9999 sem lacunas (`sequence_gaps` = 0). Foram ignoradas
-33.248 linhas de outros clientes e 9.186 linhas do gerador fora da janela
-(execuções anteriores acumuladas nos logs). O `dnsmasq.log` tem 25.253 linhas
-de consulta, das quais só 2.047 pertencem a esta execução.
-`TODO(resultados)`: regenerar e versionar `data/processed/alignment.json` junto
-com o dataset, se a regeneração for aprovada.
-
-### Processamento e atributos
-
-O fluxo atual é:
-
-```bash
-./scripts/data/process-data.sh
-```
-
-Ele executa `python -m source.process_raw` e `python -m source.split_dataset`
-sobre os arquivos em `data/raw/`. O `process_raw` aceita múltiplos logs e
-detecta por linha os formatos do dnsmasq (`query[TIPO] nome from IP`), do BIND9
-(`query: nome IN TIPO`) e do Unbound (linha de consulta `IP nome. TIPO IN`, sem
-as linhas de resposta); por padrão, o script usa `data/raw/dnsmasq/dnsmasq.log`,
-`data/raw/bind9/queries.log` e `data/raw/resolver/unbound.log` quando presentes.
-O resultado é uma linha por rótulo confirmado no log do servidor-alvo (veja
-"Alinhamento entre logs e rótulos"), gravada em `data/processed/dataset.csv`
-junto do relatório `data/processed/alignment.json`. O processamento falha com
-mensagem explícita se os rótulos estiverem concatenados, se o casamento for
-ambíguo ou se faltar log para algum rótulo, e o `split_dataset` falha se algum
-domínio aparecer em mais de um conjunto. As opções do alinhamento (`--client-ip`,
-`--tolerance-seconds`, `--max-missing-ratio`, `--strict-sequence` e `--report`)
-têm padrões que o `process-data.sh` não altera; para mudá-las, chame o módulo
-diretamente (`python -m source.process_raw --help`). A sequência equivalente,
-a partir da raiz do repositório, é:
-
-```bash
-python -m source.process_raw \
-  --log data/raw/dnsmasq/dnsmasq.log data/raw/bind9/queries.log \
-        data/raw/resolver/unbound.log \
-  --labels data/raw/query_labels.csv \
-  --output data/processed/dataset.csv \
-  --report data/processed/alignment.json
-python -m source.split_dataset \
-  --input data/processed/dataset.csv \
-  --output-dir data/processed/splits \
-  --seed 42
-```
-
-Esses comandos, como o próprio script, sobrescrevem `data/processed/`;
-regenerar o dataset versionado é uma decisão pendente (veja "Estado verificado
-do repositório"). `source/features.py` é a única fonte da verdade para:
-
-- normalização do domínio, removendo `.test`;
-- atributos lexicais;
-- vocabulário e tokenização de caracteres;
-- normalização numérica ajustada somente nos normais de treino.
-
-As features do modelo são uma lista explícita de 42 atributos lexicais (6
-escalares e 36 frequências de caracteres). `label`, `family`, `query_type`,
-`seed`, IP e cliente permanecem separados como metadados: `features.py`
-falha na importação se algum metadado entrar na lista e
-`transform_features` rejeita linhas incompletas em vez de derivar valores de
-metadados.
-
-### Separação dos dados
-
-O treino contém somente consultas `normal`. Validação e teste podem conter
-normais e anomalias, mas não compartilham domínios. O split falha se houver
-interseção e registra em `summary.json` linhas e domínios únicos por split,
-classe e família. Com `--holdout-family <família>`, uma família de anomalia
-inteira vai somente para o teste, medindo generalização para um tipo nunca
-visto na validação.
-
-O casamento entre log e rótulos considera execuções concatenadas e duplicatas:
-o `process_raw` confirma cada rótulo no log do servidor-alvo pelo IP do
-gerador, pela consulta, pelo tipo e pelo timestamp, sem assumir que a ordem
-global do log corresponda a uma única execução (veja "Alinhamento entre logs e
-rótulos"). Do lado do split, `python -m source.split_dataset` verifica
-explicitamente, em tempo de execução, que nenhum domínio aparece em mais de um
-conjunto: se aparecer, falha com um `ValueError` que lista até cinco exemplos e
-não grava os splits. A mesma `--seed` sobre o mesmo `dataset.csv` produz sempre
-os mesmos splits.
-
-### Modelos
-
-São comparados cinco detectores, todos treinados ou ajustados somente com
-exemplos normais do treino:
-
-1. **DenseAE** (`--mode semantic`, `dense-autoencoder-v1`): autoencoder denso
-   sobre os 42 atributos, com score MSE;
-2. **CharAE** (`--mode lexical`, `char-autoencoder-v1`): autoencoder de
-   caracteres, com perda de entropia cruzada por posição;
-3. **HybridAE** (`--mode hybrid`, `positional-conv-v2`): combinação dos ramos
-   numérico e de caracteres; é o modelo principal;
-4. limiar simples de entropia de Shannon do domínio normalizado;
-5. Isolation Forest sobre os mesmos 42 atributos padronizados (200 árvores,
-   seed 42).
-
-O treinamento usa seed 42, early stopping com paciência fixa de 200 épocas e
-somente exemplos normais. **O treino roda na GPU por padrão** (`--device auto`):
-se houver uma GPU NVIDIA ou AMD disponível, ela é usada; se não houver, o
-processo cai para a CPU automaticamente, sem erro e sem configuração (veja
-*Escolha do dispositivo*). Os limiares são
-calculados na validação, incluindo percentil 99 dos normais e melhor F1
-supervisionado, sem escolher limiar no teste. O score híbrido usado no
-treinamento é:
-
-```text
-score = z(entropia_cruzada_dos_caracteres)
-      + lambda * z(MSE_dos_atributos)
-```
-
-`lambda` pode ser alterado pela CLI, por exemplo `--lambda 0.7`. Os termos são
-padronizados usando somente os normais da validação antes da combinação.
-
-Também é possível treinar cada fonte de informação isoladamente:
-
-```bash
-# somente a sequência de caracteres (erro lexical/CE)
-python -m source.train --mode lexical --fresh
-
-# somente os 42 atributos numéricos (erro semântico/MSE)
-python -m source.train --mode semantic --fresh
-
-# os dois ramos, padrão
-python -m source.train --mode hybrid --fresh
-```
-
-O modo `lexical` cria um submodelo textual independente
-(`char-autoencoder-v1`). Esse checkpoint pode ser usado para inicializar o
-embedding e o encoder de caracteres do modelo híbrido:
-
-```bash
-python -m source.train \
-  --mode lexical \
-  --fresh \
-  --output-dir results/autoencoder-lexical
-
-python -m source.train \
-  --mode hybrid \
-  --fresh \
-  --lexical-checkpoint results/autoencoder-lexical/model.pt \
-  --output-dir results/autoencoder-hybrid
-```
-
-Assim, o submodelo lexical aprende primeiro a reconstruir o texto e depois
-seu encoder é reutilizado junto ao encoder numérico. O decoder lexical e o
-latente híbrido continuam sendo ajustados no segundo treinamento.
-
-O modo semântico usa os atributos agregados do domínio (entropia, proporções,
-tamanhos e frequências), enquanto o modo lexical usa a sequência de caracteres.
-Em todos os modos, o treino continua usando apenas exemplos normais.
-
-O decoder de caracteres produz uma matriz fixa de 64 posições porque os
-domínios são preenchidos ou cortados para `MAX_LENGTH`. Ele não está tentando
-acrescentar caracteres ao domínio real: está reconstruindo uma sequência
-acolchoada. Para evitar que a saída pareça preenchida, o treino aplica uma
-perda reduzida (`--pad-loss-weight`, padrão `0.2`) nas posições `PAD`; assim o
-modelo aprende a encerrar a sequência sem deixar o preenchimento dominar a
-reconstrução. O score lexical continua considerando somente posições reais.
-
-Na visualização de teste, `--samples` deve ser par: metade das amostras é
-selecionada da classe `normal` e metade da classe `suspeita`, permitindo uma
-comparação equilibrada no Matplotlib.
-
-#### Arquiteturas comparadas
-
-```mermaid
-flowchart LR
-    subgraph DenseAE["DenseAE · --mode semantic"]
-        D1["42 atributos"] --> D2["Linear 42→32<br/>ReLU · Dropout"]
-        D2 --> D3["Linear 32→16<br/>ReLU · Dropout"]
-        D3 --> D4["Linear 16→16<br/>Tanh"]
-        D4 --> D5["Decoder Linear<br/>16→16→32→42"]
-        D5 --> D6["score = MSE"]
-    end
-    subgraph CharAE["CharAE · --mode lexical"]
-        C1["64 posições<br/>vocabulário 41"] --> C2["Embedding 16"]
-        C2 --> C3["4 × Conv1d 64<br/>stride 2 na segunda"]
-        C3 --> C4["Linear → 16 latente<br/>Tanh"]
-        C4 --> C5["Decoder Linear + 4 × Conv1d<br/>saída 41 logits"]
-        C5 --> C6["score = CE"]
-    end
-    subgraph HybridAE["HybridAE · --mode hybrid"]
-        H1["64 posições"] --> H2["Embedding 16"]
-        H1 --> H3["42 atributos"]
-        H2 --> H4["4 × Conv1d 64"]
-        H3 --> H5["Linear 42→32→16"]
-        H4 --> H6["Concat<br/>2048 + 16"]
-        H5 --> H6
-        H6 --> H7["Linear → 16 latente<br/>Tanh"]
-        H7 --> H8["Decoder de caracteres<br/>+ decoder numérico"]
-        H8 --> H9["score = z(CE) + λ·z(MSE)"]
-    end
-```
-
-As três arquiteturas usam `latent_dim = 16`. O `HybridAutoencoder` aceita os
-três modos na mesma classe: em `lexical` o ramo numérico é zerado, em
-`semantic` o ramo de caracteres é zerado, e em `hybrid` ambos entram — o que
-permite inicializar o encoder híbrido com o checkpoint lexical.
-
-#### Fluxo de treinamento
-
-```mermaid
-flowchart TD
-    T1["train.csv<br/>3.482 normais"] --> T2["features.py<br/>normalização · tokenização<br/>42 atributos"]
-    T2 --> T3["StandardScaler<br/>ajustado só nos normais"]
-    T3 --> T4["encode_domain<br/>64 posições · PAD + UNK"]
-    T4 --> T5["source.train<br/>Adam · lr 1e-3 · weight_decay 1e-4<br/>batch 128 · seed 42"]
-    T5 --> T19["char_mask_prob 0.05<br/>numeric_noise_std 0.01<br/>pad_loss_weight 0.2"]
-    T5 --> T16{"--device auto<br/>há GPU visível?"}
-    T16 -->|sim| T17["Usa a GPU<br/>NVIDIA/CUDA ou AMD/ROCm<br/>com mais memória livre"]
-    T16 -->|não| T18["Cai para a CPU<br/>automaticamente, sem erro"]
-    T17 --> T6
-    T18 --> T6
-    T19 --> T6
-    T6 --> T7["Época: treino → validação"]
-    T7 --> T8{"Perda de validação<br/>melhorou?"}
-    T8 -->|sim| T9["Salva checkpoint<br/>model_state + scaler +<br/>vocabulário + limiar"]
-    T8 -->|não| T10["Conta épocas sem melhora"]
-    T10 --> T11{"200 épocas<br/>sem melhora?"}
-    T11 -->|sim| T12["Early stopping"]
-    T11 -->|não| T7
-    T9 --> T7
-    T12 --> T13["Mede score nos normais<br/>da validação"]
-    T13 --> T14["Limiar P99<br/>calibrado na validação"]
-    T9 --> T15["source.plot_training<br/>losses · confusion-matrices<br/>score-distributions · latent-space<br/>test-samples · training.gif"]
-```
-
-### Avaliação
-
-```bash
-./scripts/evaluate/evaluate.sh        # equivale a: python -m source.evaluate
-```
-
-[`source/evaluate.py`](source/evaluate.py) compara o DenseAE, o CharAE e o
-HybridAE com o limiar de entropia e o Isolation Forest e grava tudo em
-[`results/evaluation/`](results/evaluation/). Protocolo:
-
-- **Limiares só na validação:** P99 dos scores normais da validação ou melhor
-  F1 da validação (o candidato "tudo suspeito" entra na busca). O teste nunca
-  escolhe limiar; ROC-AUC, PR-AUC e recall a FPR ≤ 1% não dependem de limiar.
-- **Por registro e por domínio único:** os splits repetem o mesmo domínio com
-  tipos DNS diferentes; por isso toda métrica sai também com um ponto por
-  domínio (score médio do domínio).
-- **Proteções antes de avaliar:** o script falha se o treino tiver suspeitas,
-  se um domínio aparecer em mais de um split ou se o limiar P99 e os scores
-  recalculados divergirem dos salvos no checkpoint (sinal de que os splits
-  mudaram depois do treino).
-- **Recall por família, FPR por perfil normal e falsos positivos por
-  domínio** (`recall_by_family.csv`, `fpr_by_profile.csv`,
-  `false_positives.csv`).
-- **Prevalência:** a precisão esperada é recalculada a partir de recall e FPR
-  do teste para prevalências menores (`prevalence.csv`), pois o teste tem
-  prevalência de suspeitas muito acima da de tráfego real.
-- **Leave-one-family-out (`lofo.csv`):** os modelos nunca veem suspeitas no
-  treino, então só a calibração pode depender de uma família. Para cada
-  família, o limiar de melhor F1 é recalibrado na validação sem ela e a
-  família é avaliada no teste.
-- **Ablação (`ablation.md`):** sistemas, valores de λ do score híbrido
-  (somente no score, sem retreinar) e o score só com o MSE dos atributos.
-- **Explicabilidade:** erro por atributo e por caractere/posição
-  (`explain_*.csv`, `explain-*.png`) e exemplos concretos em
-  `explain_examples.md`.
-- **Indicador de vazamento por molde:** maior similaridade de trigramas de
-  cada domínio com os normais do treino (`leakage.csv`).
-- **Figuras:** `roc-pr.png`, `confusion-matrices.png`, `prevalence.png`,
-  `recall-by-family.png`, `fpr-by-profile.png`, `lofo.png`,
-  `explain-attributes.png` e `explain-characters.png`.
-
-Resultados no teste, por registro, gerados em
-[`results/evaluation/summary.md`](results/evaluation/summary.md) (3.344
-registros e 2.438 domínios únicos; 77,6% de suspeitas). As tabelas por domínio
-único ficam no mesmo arquivo. A seção "Resultados" traz as tabelas completas,
-a análise crítica e as conclusões.
+![Pipeline do projeto](doc/figures/pipeline.png)
+
+O pipeline reúne laboratório Docker, logs dnsmasq/BIND9/Unbound, alinhamento de
+logs e rótulos, splits sem interseção de domínios, três autoencoders, avaliação
+e demonstração. O dataset versionado tem 9.911 registros e 6.924 domínios
+únicos. O alinhamento corrigido gera 10.000 linhas, mas regenerar mudaria os
+splits e invalidaria os checkpoints; a decisão continua no [roadmap](roadmap.md).
+
+### Representação e modelos
+
+- 64 posições de caracteres e 42 atributos lexicais: seis escalares e 36
+  frequências de `a-z`/`0-9`.
+- **DenseAE:** reconstrói os atributos e usa MSE.
+- **CharAE:** reconstrói a sequência e usa entropia cruzada por posição real.
+- **HybridAE:** combina `z(CE) + lambda*z(MSE)` com estatísticas dos normais da
+  validação.
+- Entropia de Shannon e Isolation Forest servem como baselines.
+
+![Arquiteturas comparadas](doc/figures/architectures.png)
+
+O treino usa Adam, seed 42, somente normais do treino, máscara/ruído de entrada e
+early stopping pela validação. O checkpoint guarda pesos, scaler, vocabulário,
+arquitetura, estatísticas e limiar. GPU é preferida quando disponível; CPU é o
+fallback automático.
+
+![Fluxo de treino](doc/figures/training.png)
+
+Detalhes de [arquitetura](doc/arquitetura.md) e do
+[laboratório/processamento](doc/laboratorio.md) ficam fora deste resumo.
 
 ## Resultados
 
-Todo número desta seção vem de um arquivo gerado em
-[`results/evaluation/`](results/evaluation/) — as tabelas do README e do
-`summary.md` foram conferidas célula a célula contra
-[`metrics.csv`](results/evaluation/metrics.csv). O protocolo de avaliação está
-descrito em "Avaliação", acima.
+Teste por registro, limiar P99 dos normais da validação. Fonte:
+[`results/evaluation/metrics.csv`](results/evaluation/metrics.csv).
 
-### Teste por registro — limiar P99 dos normais da validação
+| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC |
+|---|---:|---:|---:|---:|---:|
+| Entropia | 0.9838 | 0.1873 | 0.3147 | 0.0107 | 0.6712 |
+| Isolation Forest | 0.9840 | 0.4513 | 0.6188 | 0.0254 | 0.9396 |
+| DenseAE | 0.9986 | 0.5592 | 0.7169 | 0.0027 | 0.9901 |
+| CharAE | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 |
+| HybridAE | 0.9973 | 1.0000 | 0.9987 | 0.0093 | 1.0000 |
 
-| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
-|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.9838 | 0.1873 | 0.3147 | 0.0107 | 0.6712 | 0.8977 | 0.1464 |
-| Isolation Forest | 0.9840 | 0.4513 | 0.6188 | 0.0254 | 0.9396 | 0.9784 | 0.3730 |
-| DenseAE (atributos) | 0.9986 | 0.5592 | 0.7169 | 0.0027 | 0.9901 | 0.9966 | 0.7368 |
-| CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
-| HybridAE | 0.9973 | 1.0000 | 0.9987 | 0.0093 | 1.0000 | 1.0000 | 1.0000 |
+O CharAE não erra nesse teste. O HybridAE detecta as mesmas 2.595 suspeitas,
+mas sinaliza sete domínios normais `normal_hard` no P99; com o limiar de melhor
+F1, sobra um falso positivo. Portanto, os dados não sustentam chamar o híbrido
+de “o melhor modelo”.
 
-### Teste por registro — limiar de melhor F1 da validação
+O teste tem 77,6% de suspeitas, muito acima do esperado em tráfego real. Com
+recall 1 e FPR 0,0093, a precisão esperada do HybridAE cai para **0,5194 com 1%
+de suspeitas** e **0,0967 com 0,1%**. F1 alto não basta para decidir uso real.
 
-| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
-|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.7600 | 0.8605 | 0.8072 | 0.9413 | 0.6712 | 0.8977 | 0.1464 |
-| Isolation Forest | 0.9357 | 0.9869 | 0.9606 | 0.2350 | 0.9396 | 0.9784 | 0.3730 |
-| DenseAE (atributos) | 0.9774 | 0.9842 | 0.9808 | 0.0788 | 0.9901 | 0.9966 | 0.7368 |
-| CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
-| HybridAE | 0.9996 | 1.0000 | 0.9998 | 0.0013 | 1.0000 | 1.0000 | 1.0000 |
+As tabelas por registro/domínio, as duas políticas de limiar, ablação, LOFO,
+prevalência, explicabilidade e falsos positivos estão em
+[`results/evaluation/summary.md`](results/evaluation/summary.md) e nos demais
+artefatos de [`results/evaluation/`](results/evaluation/).
 
-### Teste por domínio único — limiar P99 dos normais da validação
+## Aplicações na vida real
 
-| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
-|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.9838 | 0.2432 | 0.3900 | 0.0182 | 0.7880 | 0.9424 | 0.1807 |
-| Isolation Forest | 0.9932 | 0.5861 | 0.7372 | 0.0182 | 0.9582 | 0.9895 | 0.5125 |
-| DenseAE (atributos) | 0.9982 | 0.5470 | 0.7068 | 0.0045 | 0.9820 | 0.9955 | 0.6667 |
-| CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
-| HybridAE | 0.9965 | 1.0000 | 0.9983 | 0.0159 | 1.0000 | 1.0000 | 1.0000 |
+O projeto pode ser usado como **sinal auxiliar de priorização**, não como prova
+de ataque:
 
-### Teste por domínio único — limiar de melhor F1 da validação
+1. **Triagem em SOC:** ordenar logs por score para um analista revisar primeiro
+   os nomes mais anômalos, junto de ativo, destino e outras evidências.
+2. **Baseline de uma rede:** adaptar o modelo a normais confirmados de um
+   ambiente e detectar mudanças de padrão, com validação independente.
+3. **Observabilidade em resolvedor/gateway:** exportar score e explicações para
+   SIEM ou outra ferramenta, sem bloquear automaticamente.
+4. **Pesquisa e ensino:** reproduzir famílias sintéticas, medir FPR e estudar o
+   mecanismo de autoencoders sem tráfego contra terceiros.
 
-| Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% |
-|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.8219 | 0.9980 | 0.9014 | 0.9818 | 0.7880 | 0.9424 | 0.1807 |
-| Isolation Forest | 0.9379 | 0.9830 | 0.9599 | 0.2955 | 0.9582 | 0.9895 | 0.5125 |
-| DenseAE (atributos) | 0.9712 | 0.9795 | 0.9753 | 0.1318 | 0.9820 | 0.9955 | 0.6667 |
-| CharAE (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 |
-| HybridAE | 0.9995 | 1.0000 | 0.9997 | 0.0023 | 1.0000 | 1.0000 | 1.0000 |
+Ele não detecta todo túnel: domínios lexicalmente comuns, payload somente na
+resposta, tráfego direto por IP e nomes invisíveis ao ponto de coleta ficam fora
+do alcance. DoH/DoT exige instrumentar um ponto que veja os domínios. Integrações
+com Zeek, Suricata ou SIEM seriam por logs/API própria; o projeto ainda não é um
+plugin desses sistemas.
 
-### Leitura dos resultados
+O [guia de aplicações reais](doc/aplicacoes.md) detalha arquitetura de
+implantação, privacidade, limites e o protocolo para uma prova de conceito.
 
-**O problema é mais fácil do que parece.** Com 77,6% de suspeitas no teste,
-marcar tudo como suspeito já rende precisão 0,7760, recall 1 e F1 0,8739 —
-acima de todos os baselines. Só o CharAE (1,0000) e o HybridAE (0,9987) fazem
-melhor que o classificador trivial, e o DenseAE (0,7169) fica abaixo dele. Se
-a leitura parasse no F1, o trabalho pareceria ter resolvido o problema; o FPR
-é que revela a história real.
+## Análise crítica
 
-**A ordem de mérito muda com a métrica.** Pelo F1 no P99, CharAE e HybridAE
-empatam em primeiro. Pelo recall a FPR ≤ 1%, que é a métrica relevante quando
-suspeitas são raras, o HybridAE e o CharAE mantêm 1,0000 e o DenseAE cai para
-0,7368. No limiar de melhor F1, o HybridAE tem FPR de 0,0013 (1 falso positivo
-em 749 normais) contra 0,0000 do CharAE — **o CharAE não erra nada neste
-teste**: zero falsos positivos e zero falsos negativos, nas duas políticas e
-nos dois níveis. O HybridAE acerta as mesmas 2.595 suspeitas, mas erra 7
-normais no P99.
+- **Dataset sintético e fácil:** ROC-AUC 1 no laboratório não comprova eficácia
+  em tráfego real.
+- **Similaridade de moldes:** splits não repetem domínios, mas compartilham
+  padrões do gerador. A diversidade dos normais é o gargalo principal.
+- **Falsos positivos:** hashes legítimos de CDN podem parecer payloads; o
+  exemplo `f4bfff32c5.cdn.brisa` deixa isso visível na demo.
+- **Prevalência:** com ataques raros, a maioria dos alertas pode ser falsa.
+- **Uma seed e um split:** faltam intervalos de confiança e avaliação temporal.
+- **Fine-tuning contaminado:** adaptar com anomalias pode destruir a utilidade
+  do detector. Validação de treino não substitui teste independente.
+- **Escopo lexical:** o modelo não vê conteúdo da resposta nem prova exfiltração.
 
-**O DenseAE é o mais honesto dos três.** Com os mesmos 42 atributos que o
-Isolation Forest, ele acerta o dobro dos falsos positivos (FPR 0,0027 contra
-0,0254) e quase o dobro do recall (0,5592 contra 0,4513) no limiar P99. Mas
-seu recall de 0,5592 revela o limite da representação agregada: sem a
-sequência de caracteres, parte das anomalias cai dentro da cauda dos normais.
-É o custo de um detector auditável, que explica cada decisão por atributos
-concretos.
+## Conclusões
 
-**O λ do score híbrido é pouco sensível.** Na ablação
-([`ablation.md`](results/evaluation/ablation.md)), λ entre 0,5 e 1 mantém F1
-de 0,9987 e recall a FPR ≤ 1% em 1,0000; λ = 2 é equivalente (0,9985) e λ = 4
-degrada para F1 0,9915 com recall a FPR ≤ 1% em 0,9888. λ = 0 (só o ramo
-lexical do híbrido) ainda mantém recall 1,0000, mas dobra o FPR do P99
-(0,0187 contra 0,0093). O score só com MSE dos atributos é o que decai de
-verdade: recall a FPR ≤ 1% cai para 0,8389 e F1 para 0,9076. Ou seja: **os
-dois ramos são necessários, e o ramo numérico não pode ser a única fonte do
-score**.
-
-**O leave-one-family-out mostra onde a calibração vaza.** O limiar de
-entropia perde a família `low_entropy` por completo (recall 0,0000 contra
-0,4000 com todas as famílias) e o Isolation Forest cai de 1,0000 para 0,8020.
-CharAE e HybridAE mantêm 1,0000 em todas as famílias omitidas. Como os modelos
-nunca veem suspeitas no treino, isso mostra que a **calibração do limiar** —
-não o aprendizado — é o gargalo dos baselines.
-
-**Explicabilidade confirma o mecanismo.** Os exemplos de maior score
-([`explain_examples.md`](results/evaluation/explain_examples.md)) apontam
-`char_freq_x` e `char_freq_q` muito acima da média, com erro concentrado em
-posições específicas — a assinatura de base32 e base64. Nos falsos positivos,
-o erro é pequeno e difuso (`f4bfff32c5.cdn.brisa`, score 6,82 contra o limiar
-4,41): são domínios normais com aparência de hash, não reconstruções
-erradas de verdade.
-
-### Análise crítica
-
-- **Conjunto sintético fácil.** CharAE e HybridAE separam o teste quase por
-  completo (ROC-AUC 1,0000). Isso mostra que as anomalias geradas (base32,
-  hex, base64, baixa entropia e mista) são muito diferentes dos moldes normais
-  do gerador, não que o detector funcionaria em tráfego real.
-- **Vazamento por molde.** Os splits não repetem domínios, mas domínios
-  diferentes saem dos mesmos moldes. A mediana da maior similaridade de
-  trigramas de um normal do teste com algum normal do treino é 0,6364 (3,64%
-  chegam a 0,8 ou mais); para as suspeitas é 0,0556 (`leakage.csv`).
-- **Poucos domínios em `low_entropy`.** A família tem 5 domínios únicos no teste
-  e 602 dos 2.595 registros suspeitos; por isso as métricas por domínio único
-  importam.
-- **Falsos positivos.** No limiar P99 o HybridAE sinaliza 7 domínios normais,
-  todos do perfil `normal_hard` e parecidos com hashes hexadecimais de CDN
-  (por exemplo `f4bfff32c5.cdn.brisa`): 7 de 230 registros (3,0%) desse
-  perfil. Com o limiar de melhor F1 sobra 1 domínio.
-- **Prevalência.** Com recall 1,0000 e FPR 0,0093 (P99), a precisão esperada do
-  HybridAE cai para 0,5194 com 1% de suspeitas e para 0,0967 com 0,1%
-  (`prevalence.csv`): em tráfego real, com suspeitas raras, a maior parte dos
-  alertas seria falsa.
-- **Leave-one-family-out.** CharAE e HybridAE mantêm recall mínimo de 1,0000 e
-  0,9920 nas famílias omitidas da calibração. Já o limiar de entropia perde
-  `low_entropy` por completo (recall 0,0000 contra 0,4000 com todas as
-  famílias) e o Isolation Forest cai de 1,0000 para 0,8020.
-- **Sem intervalos de confiança, uma única seed e um único split.** O mesmo
-  comando roda na GPU ou na CPU conforme o hardware disponível, e treinos em
-  GPU não são idênticos bit a bit aos da CPU.
-- **Capacidade do modelo contra o tamanho dos dados.** O CharAE tem 147.273
-  parâmetros e o HybridAE 152.179, para 3.482 domínios normais de treino —
-  cerca de 42 parâmetros por domínio. Isso é o terreno em que um autoencoder
-  decora os nomes normais em vez de aprender a distribuição deles. A medição
-  direta (FPR dos normais no treino contra a do teste, no limiar P99 da
-  validação) mostra que a memorização **não** domina:
-
-  | Modelo | FPR no treino | FPR na validação | FPR no teste | Razão teste/treino |
-  |---|---|---|---|---|
-  | CharAE | 0,0000 | 0,0014 | 0,0000 | — |
-  | DenseAE | 0,0046 | 0,0071 | 0,0027 | 0,58× |
-  | HybridAE | 0,0057 | 0,0114 | 0,0093 | 1,63× |
-
-  (limiar P99 da validação; fonte em
-  [`overfitting.csv`](results/evaluation/overfitting.csv), que traz também o
-  limiar de melhor F1 e os dois baselines.)
-
-  A razão de 1,63× do HybridAE é o sintoma real de sobreajuste — e ela é
-  pequena: o modelo erra 7 normais no teste contra 20 no treino. O CharAE não
-  mostra sinal nenhum (FPR zero nos dois). Ou seja: **a capacidade excessiva
-  existe, mas o overfitting é modesto**, porque o treino já usa realce
-  (`char_mask_prob 0.05`, `numeric_noise_std 0.01`) e ruído sobre as features.
-  O limite real do detector não é decorar os nomes, é a diversidade de
-  normais: todos os falsos positivos são `normal_hard` (hashes de CDN). É
-  por isso que a fonte Tranco e os perfis temáticos importam mais que
-  mexer na arquitetura.
-- **Dataset versionado.** Foi gerado com o casamento antigo entre logs e
-  rótulos (9.911 linhas); o alinhamento corrigido produz 10.000 linhas, mas
-  mudaria os splits e invalidaria os checkpoints atuais. A regeneração depende
-  de decisão do autor (veja o `roadmap.md`).
-
-### Conclusões
-
-1. **Autoencoders vencem os baselines, mas não pela razão óbvia.** O ganho do
-   CharAE e do HybridAE sobre o limiar de entropia e o Isolation Forest não
-   vem do F1 — vem do **FPR**. Com a mesma taxa de recall, o HybridAE sinaliza
-   0,0093 dos normais contra 0,9413 do limiar de entropia no limiar de melhor
-   F1. É a diferença entre um detector utilizável e um que alerta sobre quase
-   tudo.
-
-2. **Os dois ramos carregam informações diferentes — mas neste conjunto o
-   CharAE basta.** O CharAE sozinho (só caracteres) não erra nada: F1 1,0000,
-   zero falsos positivos e zero falsos negativos, nas duas políticas e nos dois
-   níveis. O ramo numérico sozinho (DenseAE) resolve pela metade (F1 0,7169).
-   O híbrido fica no meio: mesmo recall do CharAE, mas com 7 falsos positivos
-   no P99 — neste conjunto, **o híbrido não supera o CharAE**, e apresentar
-   o híbrido como "o melhor modelo" seria errado. A razão de mantê-lo é
-   robustez: o ramo numérico ancora a decisão quando a forma do domínio
-   varia mais que sua estatística agregada, e a ablação mostra que
-   eliminar o ramo lexical (λ → ∞, score só MSE) derruba o recall a FPR ≤ 1%
-   para 0,8389. Nenhum dos dois ramos pode ser removido sem custo.
-
-3. **A calibração do limiar é o gargalo, não o modelo.** O leave-one-family-out
-   mostra que os baselines perdem famílias inteiras quando a família sai da
-   calibração, enquanto os autoencoders mantêm recall 1,0000. Um modelo que
-   generaliza e um limiar mal calibrado produzem o mesmo sintoma: a família
-   inteira passa pelo detector sem alerta. Vale medir as duas coisas.
-
-4. **Escolher a métrica errada distorce a conclusão.** Com prevalência de 77,6%,
-   o F1 premia qualquer detector recall-maximizing. O recall a FPR ≤ 1%, o FPR
-   por perfil e a precisão esperada para prevalências realistas contam uma
-   história bem diferente — e é a história que se aproxima de tráfego real,
-   onde suspeitas são raras.
-
-5. **O gargalo real é a similaridade de molde, não a arquitetura.** A mediana
-   de Jaccard entre um normal do teste e algum normal do treino é 0,6364, e
-   os únicos falsos positivos são domínios `normal_hard` com aparência de hash
-   de CDN. Nenhum modelo aqui separa "normal com hash" de "túnel com hash" —
-   para isso é preciso um dataset com essa diversidade, não um modelo melhor.
-
-6. **O detector ainda não está pronto para produção, e isso está explícito.**
-   Com 1% de suspeitas, a precisão esperada do HybridAE cai para 0,5194; com
-   0,1%, para 0,0967. O trabalho entrega um **laboratório e um método
-   auditável**, não um produto. O que falta está no roadmap: dataset
-   regenerado, demonstração ao vivo ou em replay, e avaliação com múltiplas
-   seeds.
-
-### Casos de uso
-
-```mermaid
-flowchart LR
-    Autor["Autor da disciplina"] -->|monta o laboratório| Lab["Laboratório local<br/>Docker · .test"]
-    Autor -->|coleta e processa| Dados["Dataset e splits<br/>sem interseção de domínios"]
-    Autor -->|treina e calibra| Modelos["Autoencoders<br/>lexical · semântico · híbrido"]
-    Modelos -->|avalia| Resultados["results/evaluation/<br/>métricas e análise"]
-    Lab -->|tráfego sintético| DNS["Consultas DNS<br/>observadas pelo dashboard"]
-    Autor -->|apresenta| Demo["Demonstração<br/>ao vivo ou em replay"]
-    Resultados --> Demo
-    DNS --> Demo
-```
+1. CharAE e HybridAE superam os baselines neste conjunto, mas o CharAE é o
+   melhor resultado medido; o híbrido não o supera.
+2. O limiar e a prevalência importam tanto quanto a arquitetura. F1 isolado
+   distorce a leitura quando a distribuição real é desbalanceada.
+3. O projeto entrega um laboratório, um método auditável, uma interface Gradio
+   e um mecanismo controlado de adaptação — não um produto pronto para bloqueio.
+4. A aplicação mais responsável hoje é priorização para análise humana. Uso real
+   exige dados do ambiente, teste independente, múltiplas seeds/períodos e
+   governança dos logs.
 
 ## Como reproduzir
-
-### Ambiente
 
 ```bash
 conda env create -f environment.yml
 conda activate sixeyesdns
-```
 
-As versões das dependências permanecem fixadas em
-[requirements.txt](requirements.txt) e [environment.yml](environment.yml).
-Para conferir o ambiente ativo, execute `python scripts/check_env.py`.
-
-### Coleta local
-
-```bash
-./scripts/lab/docker-run.sh
-docker compose wait generator
-```
-
-O gerador lê `QUERY_COUNT` (padrão `10000`), `ANOMALY_RATE` (padrão `0.5`) e
-`SEED` (padrão `42`) do ambiente; o `SEED` também alimenta o tráfego dos
-backends (`TRAFFIC_SEED`). O `docker-run.sh` imprime os valores efetivos antes
-de subir o laboratório:
-
-```bash
-QUERY_COUNT=2000 ANOMALY_RATE=0.4 SEED=7 ./scripts/lab/docker-run.sh
-docker compose wait generator
-```
-
-O `./scripts/data/process-data.sh` lê a mesma variável `SEED` (padrão `42`)
-para o split por domínio; defina-a também nele
-(`SEED=7 ./scripts/data/process-data.sh`) para manter a mesma semente da
-coleta à separação dos dados. `QUERY_INTERVAL` (padrão `0.01` s) e
-`TRANCO_PATH`, `TRANCO_LIMIT` e `TRANCO_RATE` (veja
-[data/external/README.md](data/external/README.md)) seguem o mesmo mecanismo.
-
-Durante a coleta, abra <http://127.0.0.1:8080> para acompanhar o tráfego
-sintético. O dashboard não envia dados para a Internet e não substitui as
-métricas do modelo.
-
-Para observar as aplicações falsas:
-
-```bash
-docker compose logs -f backend-client fake-services
-```
-
-### Construção dos modelos
-
-Os wrappers em [`scripts/model/`](scripts/model/) organizam os três casos de
-uso:
-
-```bash
 ./scripts/model/train-lexical.sh
 ./scripts/model/train-semantic.sh
 ./scripts/model/train-hybrid.sh
+./scripts/evaluate/evaluate.sh
+python -m pytest -q
 ```
 
-O treino híbrido usa automaticamente
-`results/autoencoder-lexical/model.pt` quando esse arquivo existir.
-
-Os wrappers retomam um checkpoint existente por padrão. Para iniciar do zero,
-adicione `--fresh` ao comando desejado:
+Para recriar os dados sintéticos, consulte [doc/laboratorio.md](doc/laboratorio.md).
+As figuras da documentação são PNGs gerados com Matplotlib, sem Mermaid:
 
 ```bash
-./scripts/model/train-lexical.sh --fresh
+python -m source.doc_figures
 ```
 
-Ao terminar, os wrappers geram automaticamente os gráficos no diretório do
-modelo. Para desativar essa etapa:
-
-```bash
-PLOT_AFTER_TRAINING=0 ./scripts/model/train-lexical.sh
-```
-
-Para executar os três treinamentos em sequência:
-
-```bash
-./scripts/model/train-all.sh
-```
-
-### Escolha do dispositivo (GPU por padrão, CPU automática)
-
-O treino usa `--device auto` por padrão: **a GPU é sempre a primeira opção** e
-a CPU é o fallback automático. A escolha é informada na primeira linha:
+## Estrutura principal
 
 ```text
-Dispositivo selecionado: GPU AMD (ROCm/HIP 7.2.53211) cuda:0 - AMD Radeon RX 6600, 8 GB
-Dispositivo selecionado: GPU NVIDIA (CUDA 13.2) cuda:1 - NVIDIA A100-SXM4-40GB, 40 GB
-Dispositivo selecionado: CPU (nenhuma GPU detectada)
-```
-
-- **Com GPU NVIDIA (CUDA)**, como no NPAD, ou **GPU AMD (ROCm)**, como no PC
-  local: o modelo treina na GPU, sem nenhuma flag. Havendo mais de uma GPU
-  visível, `auto` escolhe a que tem mais memória livre no momento.
-- **Sem GPU no ambiente:** cai para a CPU **automaticamente**, sem erro e sem
-  configuração. Não é preciso flag, variável de ambiente nem script
-  alternativo — o mesmo comando funciona nos dois casos.
-- Se existir uma GPU no sistema que o PyTorch instalado não consegue usar, a
-  linha da CPU explica o motivo (por exemplo, build CUDA em máquina AMD).
-
-O fallback automático vale para o `source/train.py` e para os wrappers de
-`scripts/model/`, que já passam `--device auto` por padrão. A escolha pode ser
-forçada pela CLI (`--device cpu`, `--device cuda`, `--device cuda:N`) ou pela
-variável `DEVICE` dos wrappers:
-
-```bash
-DEVICE=cpu ./scripts/model/train-hybrid.sh
-DEVICE=cuda:1 ./scripts/model/train-hybrid.sh
-```
-
-`python scripts/check_env.py` mostra a build do PyTorch, as GPUs visíveis e o
-dispositivo que `auto` escolheria.
-
-**Reprodutibilidade.** A seed é 42 em qualquer dispositivo, mas treinos em GPU
-não são idênticos bit a bit aos da CPU (ordem das operações e kernels
-diferentes). Para comparar execuções com bit a bit, force a CPU com
-`--device cpu` nos dois lados — é para isso que a suíte de testes usa CPU, e não
-por ser o caminho principal.
-
-**PC local com GPU AMD (RX 6600 XT, gfx1032).** O pacote `torch` do PyPI é a
-build CUDA e não enxerga placas AMD; o ambiente precisa da build ROCm do
-PyTorch, de acordo com o ROCm instalado (aqui, 7.2). Como a gfx1032 não tem
-build oficial no ROCm, o código define sozinho
-`HSA_OVERRIDE_GFX_VERSION=10.3.0` (sem isso o PyTorch ROCm trava); um valor
-já exportado é respeitado. Para trocar o `torch` do ambiente:
-
-```bash
-.venv-amd/bin/python -m pip uninstall -y torch triton \
-  $(.venv-amd/bin/python -m pip list --format=freeze | grep -E '^(nvidia|cuda)-' | cut -d= -f1)
-.venv-amd/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/rocm7.2
-python scripts/check_env.py
-```
-
-O `scripts/env/create-envs.sh` já instala a build ROCm ao criar um ambiente em
-máquinas AMD (versão do ROCm detectada em `/opt/rocm`, ou `ROCM_VERSION=7.2`).
-
-**NPAD (NVIDIA).** Crie o ambiente no nó com `scripts/env/create-envs.sh`, que
-detecta a GPU NVIDIA e instala o PyTorch com CUDA (se o NPAD recomendar outra
-variante, veja o comentário em [requirements.txt](requirements.txt)). Em jobs
-Slurm, solicite a GPU com `--gres=gpu:1`: o Slurm define
-`CUDA_VISIBLE_DEVICES` e `auto` usa a GPU alocada. Sem Slurm, `auto` escolhe a
-GPU visível com mais memória livre; para restringir o conjunto, exporte
-`CUDA_VISIBLE_DEVICES` antes de treinar:
-
-```bash
-export CUDA_VISIBLE_DEVICES=0,1   # GPUs candidatas
-./scripts/model/train-hybrid.sh
-```
-
-Os gráficos do treinamento ficam em [`scripts/evaluate/`](scripts/evaluate/):
-
-```bash
-RESULTS_DIR=results/autoencoder-lexical \
-  ./scripts/evaluate/generate-plots.sh --test-samples 12
-```
-
-Cada treino grava em `results/autoencoder-<modo>/`: `losses.png` (perda com o
-rótulo do modo — CE, MSE ou CE + λ·MSE —, melhor época marcada, zoom no trecho
-final e accuracy), `metrics.png`, `confusion-matrices.png` (contagens e
-percentual por classe real), `score-distributions.png` (visão completa e zoom
-perto do limiar, com eixo comum entre validação e teste e a contagem de pontos
-fora do recorte; antes de plotar, confere que os scores salvos batem com os
-rótulos do split e com o checkpoint), `test-samples.png` (até 6 amostras por
-figura, com páginas `test-samples-2.png` etc.; erro por caractere e por
-atributo na mesma escala de cores), `latent-space.png` (projeção do teste nas
-duas primeiras dimensões do espaço latente, colorida por classe e família) e
-`training.gif` (animação das curvas de perda e accuracy; desative com
-`--no-gif`).
-
-### Testes
-
-```bash
-./scripts/test/run-tests.sh
-RESULTS_DIR=results/autoencoder-lexical ./scripts/test/test-model.sh
-RESULTS_DIR=results/autoencoder-lexical ./scripts/test/plot-model.sh
-```
-
-`run-tests.sh` executa o pytest sobre [`tests/`](tests/), que cobre o
-determinismo das features e do split, a ausência de metadados na matriz de
-entrada, a ausência de interseção de domínios entre os splits e o holdout de
-família, o alinhamento entre logs e rótulos, o gerador (incluindo a fonte
-Tranco opcional), os shapes e a contagem de parâmetros dos três autoencoders,
-limiares e métricas (P99, melhor F1, ROC-AUC, recall a FPR fixa, prevalência),
-os baselines, a escolha de dispositivo GPU/CPU, o treino de poucas épocas, a
-geração dos gráficos e a avaliação completa em um dataset mínimo sintético
-([`tests/conftest.py`](tests/conftest.py)). Os testes que treinam modelos usam
-`--device cpu` para serem determinísticos em qualquer máquina — é uma escolha
-de teste, não o comportamento padrão do treino.
-
-O teste visual seleciona igualmente exemplos normais e suspeitos; use um valor
-par em `SAMPLES` ou `TEST_SAMPLES`.
-
-Para recriar os containers:
-
-```bash
-./scripts/lab/docker-recreate.sh
-```
-
-A publicação `127.0.0.1:6767:53` foi confirmada neste ambiente com consultas
-UDP e TCP respondendo `172.30.0.11` para `web.atlas.test`. No Docker
-Desktop, containers presos somente a uma rede `internal: true` têm as portas
-publicadas descartadas silenciosamente; por isso o dnsmasq também é ligado à
-rede de borda `lab-edge`, que existe apenas para expor essa porta ao host.
-Todo o tráfego do laboratório continua na rede interna.
-
-Em ambientes Docker Desktop ou VS Code nos quais a porta publicada pelo
-daemon não aparece no host, use o servidor local do dashboard:
-
-```bash
-./scripts/lab/dashboard.sh
-```
-
-Esse servidor escuta somente em `127.0.0.1:8080` e lê o resumo produzido pelo
-gerador em `data/raw/dashboard/`; ele não substitui a rede interna do
-laboratório.
-
-### Processamento
-
-```bash
-./scripts/data/process-data.sh
-```
-
-Todos os passos são executáveis também como módulos:
-
-```bash
-python -m source.process_raw --help
-python -m source.split_dataset --help
-python -m source.train --help
-python -m source.evaluate --help
-```
-
-Para uma nova coleta limpa, remova somente os artefatos gerados do laboratório
-e recrie os serviços:
-
-```bash
-rm -f data/raw/query_labels.csv data/raw/dashboard/traffic_summary.json
-rm -f data/raw/dnsmasq/dnsmasq.log data/raw/bind9/queries.log
-rm -f data/raw/resolver/unbound.log data/raw/dhcp/kea-dhcp4.log
-rm -f data/raw/dhcp/kea-leases4.csv
-./scripts/lab/docker-recreate.sh
-```
-
-Não remova dados versionados sem revisar o diff. O gerador continua limitado à
-rede Docker interna e ao domínio reservado `.test`.
-
-## Estrutura
-
-```text
-SixEyesDNS/
-├── data/
-│   ├── raw/             # logs e rótulos do laboratório (ignorado pelo Git)
-│   ├── external/        # fonte opcional Tranco (ignorada pelo Git)
-│   └── processed/
-├── docker/
-│   ├── dnsmasq/
-│   ├── bind9/
-│   ├── resolver/
-│   ├── dhcp/
-│   ├── generator/
-│   ├── dashboard/
-│   ├── nginx/
-│   └── service-api/
-├── scripts/
-│   ├── data/
-│   ├── model/
-│   ├── evaluate/
-│   ├── test/
-│   ├── demo/           # reservado para a demonstração ao vivo/replay
-│   ├── lab/
-│   └── env/
-├── source/
-│   ├── features.py      # normalização, vocabulário e os 42 atributos
-│   ├── process_raw.py   # alinhamento logs-rótulos e dataset
-│   ├── split_dataset.py
-│   ├── models.py        # DenseAE, CharAutoencoder e HybridAutoencoder
-│   ├── scoring.py       # scores, limiares (P99, melhor F1) e métricas
-│   ├── device.py        # GPU NVIDIA/AMD ou CPU
-│   ├── train.py
-│   ├── baselines.py     # entropia e Isolation Forest
-│   ├── evaluate.py
-│   ├── explain.py
-│   ├── plot_training.py
-│   └── test_model.py
-├── tests/
-├── results/
-│   ├── autoencoder-<modo>/
-│   └── evaluation/
-├── doc/
-│   └── info/            # requisitos da disciplina
-├── docker-compose.yml
-├── environment.yml
-├── requirements.txt
-└── roadmap.md
+app.py                    # entrada do Space Gradio
+source/                   # features, modelos, treino, avaliação e demos
+scripts/demo/             # Gradio e replay offline
+data/processed/           # dataset e splits versionados
+results/                  # checkpoints e avaliação verificável
+doc/                      # guias e figuras Matplotlib
+tests/                    # testes unitários e de integração
 ```
 
 ## Segurança e ética
 
-- gerar tráfego somente com scripts locais e sintéticos;
-- manter a rede Docker interna e sem encaminhamento para a Internet;
-- não implementar exfiltração real, persistência, evasão ou automação contra
-  terceiros;
-- não usar IP, cliente ou perfil de risco como feature;
-- não versionar credenciais, dados pessoais ou datasets externos;
-- documentar fontes externas realmente utilizadas;
-- registrar vazamentos entre conjuntos, falsos positivos, resultados ruins e
-  limitações.
+- Tráfego apenas local, sintético e `.test`; nenhuma exfiltração real.
+- Não versionar credenciais, dados pessoais ou datasets externos.
+- Logs DNS são sensíveis: retenção, acesso e finalidade precisam de governança.
+- O score prioriza investigação; não é prova de ataque nem autorização para
+  bloqueio automático.
 
-## Referência da disciplina
+## Referências
 
-O escopo exigido está em
-[doc/info/Descricao_do_Trabalho.md](doc/info/Descricao_do_Trabalho.md). O texto
-entregue neste README cobre as cinco partes do escopo escrito:
-
-| Parte exigida | Onde está |
-|---|---|
-| Introdução | [Introdução](#introdução) |
-| Desenvolvimento e técnicas | [Desenvolvimento e técnicas](#desenvolvimento-e-técnicas) |
-| Resultados | [Resultados](#resultados) |
-| Análise crítica | [Análise crítica](#análise-crítica) |
-| Conclusões | [Conclusões](#conclusões) |
-
-A apresentação presencial terá 10 minutos nas datas 08, 10 ou 15/12/2026,
-conforme a escolha registrada na planilha da turma. O texto deve estar
-disponível no repositório até 15/12/2026.
-
-### Fontes
-
-- **PyTorch** — treino e inferência dos autoencoders
-  ([pytorch.org](https://pytorch.org/)).
-- **scikit-learn** — Isolation Forest e padronização dos atributos
-  ([scikit-learn.org](https://scikit-learn.org/)).
-- **NumPy** e **Matplotlib** — cálculo numérico e figuras
-  ([numpy.org](https://numpy.org/), [matplotlib.org](https://matplotlib.org/)).
-- **Dnsmasq**, **BIND9**, **Unbound** e **ISC Kea** — serviços do laboratório
-  local ([dnsmasq.org](http://thekelleys.org.uk/dnsmasq/),
-  [isc.org](https://www.isc.org/bind/),
-  [nlnetlabs.nl](https://nlnetlabs.nl/projects/unbound/),
-  [kea.isc.org](https://kea.isc.org/)).
-- **Tranco** — ranking opcional de domínios populares, apenas se o arquivo
-  local for usado ([tranco.org](https://tranco.org/)). O projeto não baixa nem
-  versiona essa lista; sem o arquivo, o gerador funciona sem ela.
-
-Toda a linguagem de anomalias é gerada localmente pelo laboratório; nenhuma
-fonte externa de tráfego DNS é usada.
-
+- [PyTorch](https://pytorch.org/) — modelos e inferência.
+- [scikit-learn](https://scikit-learn.org/) — scaler e Isolation Forest.
+- [NumPy](https://numpy.org/) e [Matplotlib](https://matplotlib.org/) — cálculo
+  e figuras, incluindo os diagramas desta documentação.
+- [Gradio](https://www.gradio.app/) — interface web e Space.
+- [Dnsmasq](http://thekelleys.org.uk/dnsmasq/),
+  [BIND9](https://www.isc.org/bind/),
+  [Unbound](https://nlnetlabs.nl/projects/unbound/) e
+  [Kea](https://kea.isc.org/) — laboratório local.
+- [Tranco](https://tranco.org/) — ranking opcional, somente quando fornecido
+  localmente pelo autor.
