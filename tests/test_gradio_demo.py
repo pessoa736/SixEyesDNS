@@ -64,7 +64,7 @@ def test_domain_event_returns_a_visible_error_for_invalid_input(
     assert figure is None and attributes == [] and report == {}
 
 
-def write_normal_log(path: Path, count: int = 12) -> Path:
+def write_normal_log(path: Path, count: int = 60) -> Path:
     path.write_text(
         "".join(
             f"Nov 20 10:00:{index:02d} dnsmasq[41]: query[A] "
@@ -103,8 +103,9 @@ def test_adaptation_requires_confirmation_and_returns_a_download(
     )
     try:
         assert "Checkpoint adaptado gerado" in summary
-        assert report["train_domains"] == 10
-        assert report["validation_domains"] == 2
+        assert report["train_domains"] == 48
+        assert report["validation_domains"] == 12
+        assert "Atenção" in summary
         assert report["test_metrics"] is None
         assert checkpoint is not None and Path(checkpoint).is_file()
         assert figure is not None and len(figure.axes) == 1
@@ -120,6 +121,7 @@ def test_interface_and_app_entrypoint_are_constructed_without_loading_models(
     labels = [getattr(block, "label", None) for block in demo.blocks.values()]
     assert "Detector base" in labels
     assert "Baixar model.pt adaptado" in labels
+    assert "Log normal de exemplo (600 domínios únicos)" in labels
     import app
 
     assert app.demo is not None

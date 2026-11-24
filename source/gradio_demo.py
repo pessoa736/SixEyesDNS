@@ -30,6 +30,7 @@ MODEL_CHOICES = [
     ("DenseAE — somente os 42 atributos", "semantic"),
 ]
 ATTRIBUTE_HEADERS = ["Atributo", "Erro quadrático"]
+NORMAL_EXAMPLE_LOG = Path("scripts/demo/normal-example.txt")
 
 
 @lru_cache(maxsize=6)
@@ -143,6 +144,14 @@ def loss_plot(report: Mapping[str, Any]) -> Figure:
     return figure
 
 
+def warnings_html(report: Mapping[str, Any]) -> str:
+    return "".join(
+        '<p style="color:#b45309"><strong>Atenção:</strong> '
+        f"{html.escape(warning)}</p>"
+        for warning in report.get("warnings", [])
+    )
+
+
 def adaptation_summary_html(report: Mapping[str, Any]) -> str:
     return (
         '<div style="border:1px solid #64748b;border-radius:12px;padding:16px">'
@@ -151,6 +160,7 @@ def adaptation_summary_html(report: Mapping[str, Any]) -> str:
         f'{report["validation_domains"]} na validação<br>'
         f'Limiar P99: {report["base_threshold"]:.6f} → {report["threshold"]:.6f}<br>'
         f'Melhor perda de validação: {report["best_validation_loss"]:.6f}'
+        f"{warnings_html(report)}"
         '<p><strong>Não é uma avaliação de desempenho.</strong> '
         'Antes de usar o novo limiar, avalie o checkpoint em um teste rotulado '
         'independente que não tenha participado da adaptação.</p></div>'
@@ -290,6 +300,12 @@ def build_interface(model_dirs: Mapping[str, Path] | None = None) -> gr.Blocks:
                     confirmed = gr.Checkbox(
                         value=False,
                         label="Confirmo que todas as consultas são normais",
+                    )
+                if NORMAL_EXAMPLE_LOG.is_file():
+                    gr.Examples(
+                        examples=[[str(NORMAL_EXAMPLE_LOG)]],
+                        inputs=[replay],
+                        label="Log normal de exemplo (600 domínios únicos)",
                     )
                 with gr.Row():
                     epochs = gr.Slider(

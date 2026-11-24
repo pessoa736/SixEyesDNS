@@ -32,6 +32,11 @@ from .scoring import (
 )
 from .train import character_loss, set_seed
 
+# Com poucos domínios o P99 da validação é praticamente o maior score. Abaixo do
+# mínimo a adaptação é recusada; abaixo do estável ela roda, mas avisa.
+MIN_UNIQUE_DOMAINS = 50
+STABLE_UNIQUE_DOMAINS = 500
+
 
 def split_normal_queries(
     queries: list[ReplayQuery], validation_fraction: float = 0.2, seed: int = 42
@@ -40,16 +45,27 @@ def split_normal_queries(
     if not 0 < validation_fraction < 1:
         raise ValueError("validation_fraction precisa estar entre 0 e 1")
     unique = list({query.features["query"]: query for query in queries}.values())
-    if len(unique) < 10:
+    if len(unique) < MIN_UNIQUE_DOMAINS:
         raise ValueError(
-            "O fine-tuning precisa de ao menos 10 domínios normais únicos; "
-            f"o arquivo contém {len(unique)}"
+            f"O fine-tuning precisa de ao menos {MIN_UNIQUE_DOMAINS} domínios "
+            f"normais únicos; o arquivo contém {len(unique)}"
         )
     random.Random(seed).shuffle(unique)
     validation_count = min(
         len(unique) - 1, max(1, round(len(unique) * validation_fraction))
     )
     return unique[validation_count:], unique[:validation_count]
+
+
+def stability_warnings(total_domains: int, validation_domains: int) -> list[str]:
+    """Avisos sobre a confiabilidade do limiar P99 recalculado na validação."""
+    if total_domains >= STABLE_UNIQUE_DOMAINS:
+        return []
+    return [
+        f"Com {validation_domains} domínios na validação, o P99 depende de poucos "
+        "pontos e fica perto do maior score. Use ao menos "
+        f"{STABLE_UNIQUE_DOMAINS} domínios únicos para um limiar estável."
+    ]
 
 
 def reconstruction_objective(
@@ -222,6 +238,9 @@ def fine_tune(
         "confirmed_normal_only": True,
         "train_domains": len(train_queries),
         "validation_domains": len(validation_queries),
+        "warnings": stability_warnings(
+            len(train_queries) + len(validation_queries), len(validation_queries)
+        ),
         "validation_fraction": validation_fraction,
         "epochs": epochs,
         "learning_rate": learning_rate,

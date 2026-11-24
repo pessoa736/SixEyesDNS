@@ -7,11 +7,16 @@ import pytest
 import torch
 
 from source.demo import query_from_domain
-from source.finetune import fine_tune, split_normal_queries
+from source.finetune import (
+    MIN_UNIQUE_DOMAINS,
+    STABLE_UNIQUE_DOMAINS,
+    fine_tune,
+    split_normal_queries,
+)
 from source.scoring import load_checkpoint
 
 
-def normal_queries(count: int = 12):
+def normal_queries(count: int = 60):
     return [query_from_domain(f"node-{index:03d}.atlas.test") for index in range(count)]
 
 
@@ -29,12 +34,13 @@ def test_query_type_does_not_change_the_score(trained_models: dict[str, Path]) -
 def test_split_deduplicates_domains_and_keeps_validation_disjoint() -> None:
     queries = normal_queries() + normal_queries(2)
     train, validation = split_normal_queries(queries, validation_fraction=0.2, seed=42)
-    assert len(train) == 10 and len(validation) == 2
+    assert len(train) == 48 and len(validation) == 12
     assert {query.features["query"] for query in train}.isdisjoint(
         query.features["query"] for query in validation
     )
-    with pytest.raises(ValueError, match="ao menos 10"):
-        split_normal_queries(normal_queries(9))
+    with pytest.raises(ValueError, match="ao menos 50"):
+        split_normal_queries(normal_queries(MIN_UNIQUE_DOMAINS - 1))
+    split_normal_queries(normal_queries(MIN_UNIQUE_DOMAINS))
 
 
 def test_fine_tune_writes_a_loadable_checkpoint_without_mutating_the_base(
@@ -55,8 +61,9 @@ def test_fine_tune_writes_a_loadable_checkpoint_without_mutating_the_base(
         seed=42,
     )
 
-    assert report["train_domains"] == 10
-    assert report["validation_domains"] == 2
+    assert report["train_domains"] == 48
+    assert report["validation_domains"] == 12
+    assert len(report["warnings"]) == 1
     assert report["test_metrics"] is None
     assert len(report["history"]) == 1
     assert report["threshold"] != 0
@@ -67,6 +74,28 @@ def test_fine_tune_writes_a_loadable_checkpoint_without_mutating_the_base(
     assert adapted.checkpoint["finetune"]["confirmed_normal_only"] is True
     for key, value in base.model.state_dict().items():
         assert torch.equal(value, base_state[key])
+
+
+def test_threshold_warning_disappears_with_enough_domains(
+    trained_models: dict[str, Path], tmp_path: Path
+) -> None:
+    base = load_checkpoint(trained_models["hybrid"])
+    report = fine_tune(
+        base,
+        normal_queries(STABLE_UNIQUE_DOMAINS),
+        tmp_path / "stable",
+        confirmed_normal=True,
+        epochs=1,
+        batch_size=64,
+    )
+    assert report["warnings"] == []
+    assert report["validation_domains"] == 100
+    assert adapted_warnings(tmp_path / "stable") == []
+
+
+def adapted_warnings(model_dir: Path) -> list[str]:
+    """Os avisos viajam dentro do checkpoint adaptado, não só no relatório."""
+    return load_checkpoint(model_dir).checkpoint["finetune"]["warnings"]
 
 
 def test_fine_tune_refuses_unconfirmed_logs(

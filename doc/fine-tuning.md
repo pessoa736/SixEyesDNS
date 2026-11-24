@@ -25,6 +25,11 @@ confirmação explícita antes de iniciar.
 7. Recalcula médias, desvios e o limiar P99 somente com essa validação.
 8. Salva um novo `model.pt`, sem alterar o checkpoint base.
 
+**Tamanho mínimo.** O arquivo precisa ter ao menos 50 domínios normais únicos;
+com menos, a adaptação é recusada. Entre 50 e 499 ela roda, mas o relatório e a
+interface avisam: com poucos pontos na validação o P99 fica perto do maior
+score e o limiar é instável. Com 10 domínios, por exemplo, a validação teria 2.
+
 A separação por domínio impede que o mesmo nome apareça nos dois lados. Isso não
 elimina vazamento por moldes semelhantes nem transforma a validação em teste.
 
@@ -42,8 +47,9 @@ prevalência real antes de adotar o novo checkpoint.
 ## Interface
 
 Abra `./scripts/demo/gradio.sh`, entre em **Fine-tuning com log normal**, envie o
-arquivo, marque a confirmação e escolha épocas, quantidade máxima de consultas e
-taxa de aprendizado. O Space limita uploads e executa uma adaptação por vez.
+arquivo (ou clique no exemplo `scripts/demo/normal-example.txt`), marque a
+confirmação e escolha épocas, quantidade máxima de consultas e taxa de
+aprendizado. O Space limita uploads e executa uma adaptação por vez.
 O resultado inclui o gráfico de perda, o relatório JSON e o `model.pt` para
 download. Os arquivos gerados no Space são temporários; baixe o checkpoint e o
 relatório se quiser preservá-los.
