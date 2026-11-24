@@ -88,7 +88,8 @@ O pipeline reúne laboratório Docker, logs dnsmasq/BIND9/Unbound, alinhamento d
 logs e rótulos, splits sem interseção de domínios, três autoencoders, avaliação
 e demonstração. O dataset versionado tem 9.911 registros e 6.924 domínios
 únicos. O alinhamento corrigido gera 10.000 linhas, mas regenerar mudaria os
-splits e invalidaria os checkpoints; a decisão continua no [roadmap](roadmap.md).
+splits e invalidaria os checkpoints; a regeneração foi decidida e está nas
+pendências do [roadmap](roadmap.md#pendências-em-ordem-de-execução).
 
 ### Representação e modelos
 

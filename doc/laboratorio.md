@@ -30,8 +30,9 @@ Os logs locais ficam em `data/raw/`, ignorados pelo Git. O dataset versionado te
 9.911 registros e 42 atributos lexicais; os splits atuais têm 3.482 registros de
 treino, 3.085 de validação e 3.344 de teste, sem interseção de domínios entre os
 splits. O alinhamento corrigido gera 10.000 linhas, mas regenerar mudaria os
-splits e invalidaria os checkpoints atuais; essa decisão continua aberta no
-roadmap.
+splits e invalidaria os checkpoints atuais; a regeneração foi decidida em
+24/11/2026 e está nas
+[pendências do roadmap](../roadmap.md#pendências-em-ordem-de-execução).
 
 ## Treino e avaliação
 

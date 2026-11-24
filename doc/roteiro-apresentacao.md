@@ -78,7 +78,7 @@ para reconstruir deveria ajudar a achar suspeitas. Os dados atuais não mostram
 isso. Os 42 atributos são calculados do próprio domínio, então o ramo numérico
 recebe a mesma informação, reorganizada, e o CharAE já separa tudo. Para
 testar de verdade seria preciso um dataset mais difícil e informação que não
-derive do nome. Isso está no [roadmap](../roadmap.md), na Fase 6.
+derive do nome. Isso está no [roadmap](../roadmap.md#hipótese-do-híbrido).
 
 ## 4. Resultados e análise crítica (3 min)
 
