@@ -106,7 +106,7 @@ def pipeline_figure() -> tuple[Figure, Axes]:
             "Laboratório\nDocker · zona .test",
             "Logs e rótulos\ndnsmasq · BIND9 · Unbound",
             "process_raw\nalinhamento temporal",
-            "dataset.csv\n9.911 registros",
+            "dataset.csv\n20.000 registros",
         ],
         0.61,
         0.19,
