@@ -5,6 +5,8 @@ RUN apk add --no-cache dnsmasq \
 
 COPY dnsmasq.conf /etc/dnsmasq.conf
 
-ENTRYPOINT ["dnsmasq", "--no-daemon", "--conf-file=/etc/dnsmasq.conf"]
+# O dnsmasq reabre o log com modo 660 e mantém o grupo; o arquivo recebe o
+# grupo do diretório montado (o do usuário do host), que assim consegue lê-lo.
+ENTRYPOINT ["sh", "-c", "touch /var/log/dnsmasq/dnsmasq.log && chown dnsmasq:$(stat -c %g /var/log/dnsmasq) /var/log/dnsmasq/dnsmasq.log && chmod 0644 /var/log/dnsmasq/dnsmasq.log && exec \"$@\"", "--", "dnsmasq", "--no-daemon", "--conf-file=/etc/dnsmasq.conf"]
 
 

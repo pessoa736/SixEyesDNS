@@ -1,9 +1,13 @@
 FROM alpine:3.20
 
 RUN apk add --no-cache bind \
-	&& mkdir -p /var/log/named /var/cache/named /etc/bind/zones
+	&& mkdir -p /var/log/named /var/cache/named /etc/bind/zones \
+	&& chown named:named /var/cache/named
 
 COPY named.conf /etc/bind/named.conf
 COPY zones/ /etc/bind/zones/
 
-ENTRYPOINT ["named", "-f", "-c", "/etc/bind/named.conf"]
+# Sem -u o named fica como uid 0 mas sem CAP_DAC_OVERRIDE, e não lê o próprio
+# rndc.key nem grava o log; com -u named, log e cache pertencem a ele. O root
+# cria o log antes, no bind mount do host, com leitura para todos.
+ENTRYPOINT ["sh", "-c", "touch /var/log/named/queries.log && chown named /var/log/named/queries.log && chmod 0644 /var/log/named/queries.log && exec \"$@\"", "--", "named", "-u", "named", "-f", "-c", "/etc/bind/named.conf"]
