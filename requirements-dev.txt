@@ -1,0 +1,3 @@
+# Dependências para rodar a suíte de testes: python -m pytest -q
+-r requirements.txt
+pytest==9.2.0
