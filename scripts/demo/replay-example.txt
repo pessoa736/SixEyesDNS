@@ -1,0 +1,13 @@
+# Replay offline com consultas do split de teste e ruído típico dos servidores.
+# Os rótulos não são lidos pela demo; os três formatos podem aparecer no mesmo arquivo.
+Nov 20 10:00:00 dnsmasq[41]: query[A] staging.api.orbita.test from 172.30.0.6
+20-Nov-2026 10:00:01.125 queries: client @0x7f8e631e60e0 172.30.0.6#53000 (aaj4pccnvdeac.tunnel.test): query: aaj4pccnvdeac.tunnel.test IN A + (172.30.0.3)
+[1795168802] unbound[1:0] info: 172.30.0.6 ratio-technique.yuta.jjk.test. AAAA IN
+Nov 20 10:00:03 dnsmasq[41]: query[MX] 7c2a488f471558ea9c7d162f.tunnel.test from 172.30.0.6
+20-Nov-2026 10:00:04.125 queries: client @0x7f8e631e60e0 172.30.0.6#53000 (f4bfff32c5.cdn.brisa.test): query: f4bfff32c5.cdn.brisa.test IN A + (172.30.0.3)
+[1795168805] unbound[1:0] info: 172.30.0.6 pi3ku-x89yiepwbjtrzc_q.tunnel.test. A IN
+[1795168805] unbound[1:0] info: 172.30.0.6 pi3ku-x89yiepwbjtrzc_q.tunnel.test. A IN NOERROR 0.000000 1 91
+Nov 20 10:00:06 dnsmasq[41]: query[TXT] safesafesafesa.catalog.tunnel.test from 172.30.0.6
+20-Nov-2026 10:00:07.125 queries: client @0x7f8e631e60e0 172.30.0.6#53000 (ogb4gm2cgm-30.tunnel.test): query: ogb4gm2cgm-30.tunnel.test IN TXT + (172.30.0.3)
+[1795168808] unbound[1:0] info: 172.30.0.6 ap-south.catalog.atlas.test. AAAA IN
+Nov 20 10:00:09 dnsmasq[41]: reply ap-south.catalog.atlas.test is 172.30.0.11
