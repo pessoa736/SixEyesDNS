@@ -241,14 +241,14 @@ def roadmap_figure() -> tuple[Figure, Axes]:
     ]
     bottom = [
         "Fase 4\nDemonstração\nEM CONSOLIDAÇÃO",
-        "Fase 5\nTexto concluído\nROTEIRO PENDENTE",
+        "Fase 5\nTexto e roteiro\nPRONTOS",
         "Fase 6\nRobustez\nPLANEJADA",
     ]
     for index, label in enumerate(top):
         box(axis, positions[index], 0.58, 0.27, 0.18, label, "green", 10.5)
         if index:
             arrow(axis, (positions[index - 1] + 0.27, 0.67), (positions[index], 0.67))
-    colors = ["blue", "yellow", "gray"]
+    colors = ["blue", "green", "gray"]
     for index, label in enumerate(bottom):
         box(axis, positions[index], 0.22, 0.27, 0.18, label, colors[index], 10.5)
     arrow(axis, (positions[2] + 0.135, 0.58), (positions[0] + 0.135, 0.40), rad=0.12)

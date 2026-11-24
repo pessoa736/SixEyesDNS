@@ -18,8 +18,8 @@ A consolidação do laboratório, dos modelos, da avaliação e da documentaçã
 mergeada na branch `master` pela PR #1 (08/11/2026). O texto da disciplina está
 consolidado no [README](README.md), com introdução, técnicas, resultados, análise
 crítica e conclusões — as cinco partes do escopo escrito. Esse texto ainda está
-na branch `docs/atualizar-readme-roadmap` (7 commits à frente da `master` em
-24/11/2026), e a entrega é lida na `master`.
+na branch `docs/atualizar-readme-roadmap`, não mergeada, e a entrega é lida na
+`master`.
 
 ![Fases do projeto](doc/figures/roadmap.png)
 
@@ -117,6 +117,21 @@ e ainda não foi feita.
       anomalias mais difíceis (curtas, baseadas em palavras, a taxa baixa) e
       prevalência de suspeitas mais realista (hoje 50% no dataset e 77,6% no
       teste). Sem isso o CharAE chega a ROC-AUC 1 e os modelos não se separam.
+- [x] Controlar o atalho do sufixo `.tunnel` (`python -m source.suffix_control`;
+      resultado em `results/evaluation/suffix_control.csv`). No dataset, 100%
+      das 4.977 linhas suspeitas terminam em `.tunnel` e nenhuma das 4.934
+      linhas normais contém `tunnel` (`docker/generator/gerador_queries.py:300-303`).
+      Medido no teste, com o P99 de cada checkpoint: o sufixo **não é
+      necessário** (trocar `.tunnel` por sufixos de aparência normal mantém o
+      recall do CharAE e do híbrido em 1,0000 nas cinco famílias; o do DenseAE
+      cai de 0,5592 para 0,4644), mas é **suficiente** (acrescentar `.tunnel`
+      aos 440 domínios normais do teste leva o FPR do CharAE de 0,0000 para
+      0,8341 e o do híbrido de 0,0159 para 0,4773). O detector reage ao
+      payload, mas também a qualquer trecho nunca visto no treino, o que
+      combina com os falsos positivos de hash de CDN.
+- [ ] Gerar as anomalias do dataset novo sob zonas e sufixos de aparência
+      normal, em vez de sempre `.tunnel`, e incluir normais com palavras raras,
+      para que o FPR não dependa de o trecho já ter sido visto.
 - [ ] Corrigir a família `low_entropy` do gerador: ela produz só **8 domínios
       únicos** em 989 linhas (`"safe" * n` truncado, combinado com 8 serviços
       em `docker/generator/gerador_queries.py:283-301`), cerca de 120
@@ -290,8 +305,9 @@ determinístico e reproduzível.
 ## Fase 5 — Relatório e apresentação
 
 Status: **texto concluído** no README (introdução, técnicas, resultados,
-análise crítica e conclusões); falta o roteiro cronometrado e a lista de
-figuras.
+análise crítica e conclusões) e roteiro cronometrado com lista de figuras em
+[doc/roteiro-apresentacao.md](doc/roteiro-apresentacao.md); faltam as capturas
+do plano B e um ensaio com cronômetro.
 
 - [x] Organizar o README com Introdução, Desenvolvimento/Técnicas, Resultados,
       Reprodução, Segurança/Ética e Referências.
@@ -302,10 +318,13 @@ figuras.
       pipeline, arquiteturas, treino, roadmap e demonstração/adaptação.
 - [x] Manter `source/doc_figures.py` para regenerar as figuras em
       `doc/figures/` sem serviço externo de renderização.
-- [ ] Criar `doc/roteiro-apresentacao.md` para 10 minutos:
+- [x] Criar `doc/roteiro-apresentacao.md` para 10 minutos:
       introdução 1,5; pipeline 2; modelos 2; resultados 3; demo 1,5 (pelo
       Space).
-- [ ] Listar as figuras necessárias para a apresentação.
+- [x] Listar as figuras necessárias para a apresentação (tabela no roteiro; as
+      imagens não foram revisadas visualmente).
+- [ ] Tirar as capturas de tela do Space para o plano B e ensaiar a fala com
+      cronômetro.
 - [x] Atualizar referências apenas para fontes realmente utilizadas.
 - [x] Versionar os resultados gráficos dos treinamentos lexical, semântico e
       híbrido produzidos localmente.
@@ -363,6 +382,10 @@ dizer (uma seed, um split, avaliação no teto):
 - No P99, o CharAE tem FPR 0,0000, contra 0,0093 do híbrido (λ=1) e 0,0187
   com λ=0. Isso não indica ganho do treino conjunto, mas é uma seed.
 - Com ROC-AUC 1 nos dois, o teste não separa CharAE e híbrido (efeito de teto).
+- Ao acrescentar `.tunnel` a normais do teste (`results/evaluation/suffix_control.csv`),
+  o FPR do híbrido (0,4773) fica abaixo do do CharAE (0,8341). Os limiares são
+  calibrados em escalas diferentes (4,41 e 3,14), então não dá para atribuir
+  isso ao ramo numérico sem um controle.
 
 Para testar de verdade:
 
@@ -384,7 +407,7 @@ Para testar de verdade:
       poucos minutos com o dataset versionado (100 épocas do híbrido: 121 s).
 - [x] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
       versionado.
-- [x] `pytest` passa (268 testes em 24/11/2026).
+- [x] `pytest` passa (271 testes em 24/11/2026).
 - [x] Nenhuma feature usa `label`, `family`, `query_type`, `seed`, IP ou
       cliente.
 - [x] O README não contém métricas inventadas (as tabelas de resultados foram
@@ -401,7 +424,7 @@ Para testar de verdade:
    `requirements.txt` (feito) e publicar e verificar o Space (pacote verificado
    localmente; falta publicar).
 2. Escrever `doc/roteiro-apresentacao.md` com os tempos de 10 minutos e a
-   lista de figuras.
+   lista de figuras (feito; faltam as capturas do plano B e o ensaio).
 3. Regenerar um dataset mais variado, retreinar e reavaliar em commits
    separados. Se não couber até 15/12, documentar a limitação e manter os
    números atuais, já conferidos.
