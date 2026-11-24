@@ -233,3 +233,5 @@ data/external/*
 results/**/*.json
 # A avaliação final é versionada para que os números do README sejam verificáveis
 !results/evaluation/*.json
+# Backups locais dos checkpoints antigos (a versao original fica no historico do git).
+results/**/*.pt.bak
