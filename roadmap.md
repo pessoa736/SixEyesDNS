@@ -246,22 +246,32 @@ domínios, preserva o modelo base e não declara métricas sem teste independent
       sessões, pesos, pausas e telemetria por site.
 - [x] Adicionar scripts de teste para pytest, checkpoint e geração de plots.
 
+- [x] Corrigir o `requirements.txt` e montar o pacote do Space. Faltavam
+      `scikit-learn` (`source/scoring.py`) e `matplotlib`
+      (`source/gradio_demo.py`); o `pytest` foi para `requirements-dev.txt`.
+      `./scripts/demo/space-bundle.sh` gera `build/space` (26 arquivos, 3,9 MiB:
+      `app.py`, `source/`, os três `model.pt`, os logs de exemplo e o
+      `requirements.txt` com o torch de CPU). `tests/test_space_bundle.py`
+      falha se algum import de terceiros ficar fora do requirements.
 - [ ] Publicar o Space no Hugging Face (extra, mas é o meio de demonstração na
-      sala). Corrigir antes o `requirements.txt`: falta `scikit-learn`
-      (importado em `source/scoring.py`) e `matplotlib`
-      (`source/gradio_demo.py`), sobra `pytest`, e o `torch` do PyPI traz a
-      build CUDA, desnecessária num Space de CPU. Enviar só o que o app usa:
-      `app.py`, `source/` e `results/autoencoder-*/model.pt`.
-- [ ] Verificar o Space publicado, não só o app local: chamar `/on_domain` e
-      `/on_finetune` e reabrir o checkpoint adaptado.
+      sala): criar o Space e rodar `hf auth login` e `hf upload <usuario>/<space>
+      build/space . --repo-type=space --exclude .space-bundle`. Depende da conta
+      do autor; o `git push` do repositório inteiro leva PNG, GIF e dados no
+      histórico, e o Hub pode recusá-los sem Xet/LFS (não testado).
+- [ ] Verificar o Space publicado. **Já verificado (24/11/2026)** a partir do
+      pacote, num venv novo só com o `requirements.txt` do Space (torch
+      2.15.0+cpu): `/on_domain` nos quatro exemplos, `/on_finetune` com o log
+      de exemplo (1,5 s em CPU), reabertura do checkpoint adaptado e as duas
+      recusas. Falta repetir no Space publicado.
 - [ ] Plano B para a apresentação: capturas de tela ou vídeo curto do Space,
       caso a rede da sala falhe, e abrir o Space antes de começar (Spaces
       gratuitos podem estar dormindo).
-- [ ] Definir o mínimo de domínios do fine-tuning. Com 10 domínios únicos a
-      validação fica com 2 e o P99 vira praticamente o máximo. **Proposta
-      (a confirmar):** recusar abaixo de 50 domínios únicos, avisar na interface
-      que o limiar é instável até 500 e versionar um log normal de exemplo
-      para a demonstração.
+- [x] Definir o mínimo de domínios do fine-tuning. Com 10 domínios únicos a
+      validação ficava com 2 e o P99 virava praticamente o máximo. Agora a
+      adaptação é recusada abaixo de 50 domínios únicos e avisa (relatório,
+      checkpoint e interface) abaixo de 500. A aba traz um log normal de
+      exemplo, `scripts/demo/normal-example.txt` (600 domínios únicos).
+      Os limites 50 e 500 são heurísticos, não calibrados.
 
 - [ ] Medir se refazer o `StandardScaler` só com o log de adaptação
       (`source/finetune.py`) desloca a entrada em relação aos pesos treinados
@@ -374,7 +384,7 @@ Para testar de verdade:
       poucos minutos com o dataset versionado (100 épocas do híbrido: 121 s).
 - [x] `python -m source.evaluate` roda em CPU no dataset mínimo e no dataset
       versionado.
-- [x] `pytest` passa (260 testes).
+- [x] `pytest` passa (268 testes em 24/11/2026).
 - [x] Nenhuma feature usa `label`, `family`, `query_type`, `seed`, IP ou
       cliente.
 - [x] O README não contém métricas inventadas (as tabelas de resultados foram
@@ -387,8 +397,9 @@ Para testar de verdade:
 
 ## Ordem de execução
 
-1. Commitar o trabalho pendente por área, corrigir o `requirements.txt` e
-   publicar e verificar o Space.
+1. Commitar o trabalho pendente por área (feito), corrigir o
+   `requirements.txt` (feito) e publicar e verificar o Space (pacote verificado
+   localmente; falta publicar).
 2. Escrever `doc/roteiro-apresentacao.md` com os tempos de 10 minutos e a
    lista de figuras.
 3. Regenerar um dataset mais variado, retreinar e reavaliar em commits
