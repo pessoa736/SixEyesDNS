@@ -81,8 +81,39 @@ O roteiro e a lista de figuras já existem em
       do Space para o caso de a rede da sala falhar, ensaiar a fala com
       cronômetro e abrir o Space antes de começar (Spaces gratuitos podem
       estar dormindo).
+- [ ] Aba **"Analisar log"** no Gradio (ideia de 24/11/2026). Hoje o replay só
+      existe na CLI (`source/demo.py --replay`); a aba de log do Gradio só
+      adapta o modelo. A lógica já é compartilhada (`build_report` é
+      documentado como "comum ao CLI e à interface web"), então falta só a
+      interface. Desenho proposto:
+      - upload de `.log`/`.txt` (dnsmasq, BIND9, Unbound, formatos misturados)
+        com limite de consultas, como o slider da aba de fine-tuning;
+      - tabela **deduplicada por domínio** (domínio, nº de consultas, score,
+        veredito), ordenada por score, com filtro "só suspeitas"; visão
+        opcional na ordem do log (o "um após o outro");
+      - clicar numa linha abre o mapa de erro por caractere e os atributos
+        que a aba "Testar modelo" já tem (`character_plot`, `attribute_rows`);
+      - exemplo clicável com `scripts/demo/replay-example.txt` (confirmar que
+        o `space_bundle.py` o inclui);
+      - **privacidade:** no Space público o upload vai para o servidor do
+        Hugging Face e log real de DNS revela navegação; reaproveitar o padrão
+        de aviso + checkbox da aba de fine-tuning e pedir logs sintéticos ou
+        anonimizados;
+      - **limiar:** o replay não recalibra; o P99 vem da validação sintética e
+        em log real muito domínio normal desconhecido deve estourá-lo. Mostrar
+        o score ordenado, não só o veredito, e apresentar o fluxo "adaptar com
+        log normal, depois analisar" (hoje o fine-tuning gera um `model.pt`
+        para baixar e não troca o modelo ativo; usá-lo na mesma sessão exige
+        trabalho extra);
+      - opcional e barato: agregar por **zona** (domínio-pai) e contar
+        subdomínios únicos suspeitos por zona, já que túnel costuma gerar
+        muitos subdomínios únicos sob a mesma zona (princípio de design, não
+        validado aqui);
+      - testes em `tests/test_gradio_demo.py` e atualização do roteiro (encurtar
+        "Testar modelo" e dar a maior parte da demo à aba de log, com captura
+        de tela de plano B).
 
-### 3. Schema do dataset (baixa prioridade)
+### 3. Schema do dataset e fontes de domínios (baixa prioridade)
 
 A regeneração, o retreino e a reavaliação (24/11/2026) estão concluídos; ver o
 histórico das Fases 2 e 3. Resta só a limpeza de schema abaixo, que exige uma
@@ -94,6 +125,23 @@ nova regeneração (dataset-v3) e por isso não é prioridade para 15/12.
       (`FEATURE_COLUMNS` e o `assert` de `source/features.py`), mas gravar só
       `query`, os 42 atributos e `label`, com os metadados de auditoria em
       arquivo separado, elimina o risco de vazamento por construção.
+- [ ] Usar domínios populares reais (Tranco) como normais no próximo dataset.
+      O suporte já existe no gerador (`docker/generator/external_domains.py`,
+      perfil `normal_tranco`, `TRANCO_LIMIT`/`TRANCO_RATE`), mas
+      `data/external/tranco_top.csv` não existe e o dataset-v2 **não tem**
+      nenhuma linha `normal_tranco`. Cuidados: (1) o Tranco mede
+      **popularidade, não segurança**: o ranking padrão agrega Umbrella,
+      Majestic, Farsight, CrUX e Cloudflare Radar, e o site oferece filtros
+      opcionais como o do Google Safe Browsing, o que indica que a lista crua
+      pode conter domínios indesejados; baixar uma lista com esse filtro e
+      citar o identificador dela; (2) a lista padrão traz domínios registrados
+      (existe uma variante "com subdomínios"), então os nomes são curtos e
+      limpos e não representam hashes de CDN nem subdomínios longos, que são
+      os falsos positivos reais; (3) o Tranco não diz quais domínios são
+      acessados **em conjunto**: para sessões realistas, é preciso um modelo
+      próprio de co-acesso no gerador (ex.: uma página popular dispara
+      consultas a seus CDNs e trackers); (4) o gerador limita o nome a 48
+      caracteres e só os usa como texto `.test`.
 
 ### 4. Robustez e hipótese do híbrido
 
@@ -192,6 +240,27 @@ Histórico desta hipótese: o dataset-v1 (9.911 registros, 100% das suspeitas em
 `.tunnel`) tinha ROC-AUC 1 nos dois modelos e não permitia comparação; uma
 prévia sem Docker, não versionada, já indicava que o teto sumia com o gerador
 novo, mas não tinha convergido (early stopping não disparado em 800 épocas).
+
+## Utilidade e limites de uso
+
+Avaliação de 24/11/2026 (números do HybridAE no teste do dataset-v2, P99; o
+resto é inferência, marcada como tal).
+
+- **Medido:** FPR 0,55% por registro e 1,17% por domínio único (14 de 1.194
+  normais); precisão esperada 0,64 a 1% de suspeitas e 0,15 a 0,1%. O modelo
+  vê só o nome da consulta, sem volume, frequência por zona, tamanho de
+  resposta nem timing. Tudo sobre tráfego sintético.
+- **Faz sentido:** caça retroativa em logs de resolvedor (revisão humana
+  sobre os N domínios únicos de maior score); um sinal dentro de um pipeline
+  maior (SIEM, Zeek, Suricata), combinado com contagem de subdomínios por
+  zona; baseline por rede via fine-tuning com log normal, mais plausível em
+  redes pequenas e homogêneas (laboratório, filial, IoT, honeypot; inferência);
+  ensino e pesquisa, pelo mapa de erro por caractere; e, como extensão não
+  testada, detecção de DGA.
+- **Não usar:** bloqueio automático sem revisão, única camada de defesa, ou
+  rede grande e heterogênea sem recalibração.
+- **Ressalva:** em rede real, hashes de CDN, trackers e DKIM são mais variados
+  que os do gerador; espera-se FPR pior (inferência; não testado em log real).
 
 ## Critérios de aceitação
 
