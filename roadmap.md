@@ -27,11 +27,11 @@ na branch `docs/atualizar-readme-roadmap`, não mergeada, e a entrega é lida na
 | Fase | Estado | O que falta |
 |---|---|---|
 | 1 — Estrutura e schema | concluída | — |
-| 2 — Dados | laboratório e alinhamento prontos; regeneração decidida | bloco 3 |
-| 3 — Modelos, treino e avaliação | concluída | bloco 3 (normais difíceis) |
+| 2 — Dados | concluída (dataset-v2 regenerado, 24/11/2026) | separar metadados (baixa prioridade) |
+| 3 — Modelos, treino e avaliação | concluída (retreinados e reavaliados no dataset-v2) | — |
 | 4 — Demonstração | Gradio, replay e fine-tuning prontos; pacote do Space verificado localmente | blocos 1, 4 e 6 |
 | 5 — Relatório e apresentação | texto e roteiro prontos | blocos 2 e 5 |
-| 6 — Robustez | planejada; depende do dataset novo | bloco 4 |
+| 6 — Robustez | regeneração e retreino feitos; falta variância (seeds/splits) e CI | bloco 4 |
 
 ## Decisões do autor (24/11/2026)
 
@@ -43,8 +43,9 @@ na branch `docs/atualizar-readme-roadmap`, não mergeada, e a entrega é lida na
   geração do dataset e treino não fazem parte da apresentação.
 - **Space no Hugging Face:** é um extra do projeto, mas é o meio de
   demonstração na sala.
-- **Dataset:** será regenerado, mais completo e variado, com tráfego que lembre
-  uma rede em funcionamento (bloco 3).
+- **Dataset:** regenerado em 24/11/2026 (dataset-v2: 20.000 registros, 10.971
+  domínios únicos, `ANOMALY_RATE=0,15`, anomalias sem sufixo fixo). Os três
+  modelos foram retreinados e reavaliados nele.
 - **Modelo híbrido:** o autor quer defender o híbrido pela hipótese de que mais
   informação para reconstruir o torna mais capaz de identificar domínios
   suspeitos. A hipótese e o que os dados atuais dizem sobre ela estão em
@@ -81,58 +82,23 @@ O roteiro e a lista de figuras já existem em
       cronômetro e abrir o Space antes de começar (Spaces gratuitos podem
       estar dormindo).
 
-### 3. Dataset novo, retreino e reavaliação
+### 3. Schema do dataset (baixa prioridade)
 
-Decidido em 24/11/2026. Ordem: gerador, schema, regeneração e retreino, cada
-etapa em commit separado. O gerador já está pronto (itens no histórico da Fase
-2); falta o schema, a regeneração no laboratório e o retreino. Se não couber
-até 15/12, documentar a limitação e manter os números atuais, já conferidos.
-Uma prévia sem Docker mostrou que o gerador novo tira o teto (veja Hipótese do
-híbrido).
+A regeneração, o retreino e a reavaliação (24/11/2026) estão concluídos; ver o
+histórico das Fases 2 e 3. Resta só a limpeza de schema abaixo, que exige uma
+nova regeneração (dataset-v3) e por isso não é prioridade para 15/12.
 
-- [ ] Tornar o tráfego sintético mais próximo de uma rede em funcionamento.
-      **Já no gerador:** normais com ids de CDN em base32, identificadores
-      hexadecimais e ferramentas de infraestrutura pouco frequentes, e
-      anomalias `dictionary` e `short`. **Falta decidir:** a prevalência de
-      suspeitas (`ANOMALY_RATE`; hoje 0,5 no dataset e 77,6% no teste) e os
-      perfis de cliente com ritmos diferentes, que só importam para um ramo
-      comportamental, já que o timestamp não é feature.
-- [ ] Diversificar os perfis normais difíceis e avaliar famílias não vistas
-      para reduzir o FPR do lexical/híbrido no teste. Parcial: o
-      leave-one-family-out já avalia famílias omitidas da calibração e o
-      gerador ganhou normais temáticos, a fonte Tranco opcional, ids de CDN,
-      identificadores hexadecimais e palavras raras. Falta regenerar o dataset
-      e retreinar, o que acompanha a regeneração decidida em 24/11/2026.
 - [ ] Separar features de metadados no `dataset.csv`: ele tem 59 colunas e
       grava `is_<tipo DNS>`, `is_family_*`, `query_type`, `family`, `profile`,
       `label` e `seed` ao lado dos 42 atributos. O modelo já as ignora
       (`FEATURE_COLUMNS` e o `assert` de `source/features.py`), mas gravar só
       `query`, os 42 atributos e `label`, com os metadados de auditoria em
-      arquivo separado, elimina o risco de vazamento por construção. Fazer
-      junto com a regeneração: muda o schema e os testes de `process_raw` e
-      `split_dataset`.
-- [ ] Regenerar e versionar `data/processed/` com o gerador novo e o
-      alinhamento corrigido (10.000 linhas), em commit separado. Antes, decidir
-      `QUERY_COUNT` e `ANOMALY_RATE` (padrões 10000 e 0,5). Checado em
-      24/11/2026 sem subir nada: os containers de outro projeto
-      (`redes-de-computadores-2-*`) não publicam portas e a sub-rede
-      `172.30.0.0/24` e as portas 6767 e 8080 estão livres. Passos:
-      `./scripts/lab/docker-run.sh`, `docker compose wait generator` e
-      `./scripts/data/process-data.sh`.
-- [ ] Versionar `data/processed/alignment.json` junto com o dataset
-      regenerado.
-- [ ] Retreinar os três modelos sobre o dataset regenerado e reavaliar. Não
-      fixar poucas épocas: na prévia sem Docker o melhor ponto de validação foi
-      o limite de 800 épocas e o early stopping não disparou. Depois, reconferir
-      célula a célula as tabelas do README, do `results/evaluation/summary.md` e
-      do roteiro contra `results/evaluation/metrics.csv` (tolerância 5e-5) e
-      trocar os exemplos fixos que citam `.tunnel` (`source/gradio_demo.py`,
-      `scripts/demo/replay-example.txt`): os números mudam com o dataset novo.
+      arquivo separado, elimina o risco de vazamento por construção.
 
 ### 4. Robustez e hipótese do híbrido
 
-Os quatro primeiros itens não dependem do dataset novo e podem andar em
-paralelo ao bloco 3; os quatro últimos dependem dele.
+O dataset-v2 já existe e foi usado numa única seed; os quatro últimos itens
+pedem múltiplas seeds ou splits sobre ele, não um dataset novo.
 
 - [ ] Passar `weights_only=True` explícito nos `torch.load`
       (`source/scoring.py`, `source/train.py`): o padrão do torch atual já é
@@ -168,10 +134,10 @@ paralelo ao bloco 3; os quatro últimos dependem dele.
 - [ ] Reautenticar o `gh` (`gh auth login` e depois `gh auth setup-git`): em
       24/11/2026 ele devolveu HTTP 401, o que impede consultar a PR #2 e
       bloqueia o push e o merge na `master`.
-- [ ] Atualizar `.github/copilot-instructions.md`, que descreve um estado
-      antigo: 50.000 linhas, 58 colunas, 60.000 consultas no log, 126 domínios
-      normais e a branch `ajustes-u3`. O dataset versionado tem 9.911 linhas e
-      59 colunas, e o alinhamento já corrige o log concatenado.
+- [x] Atualizar `.github/copilot-instructions.md`, que descrevia um estado de
+      08/11/2026 (50.000 linhas, 60.000 consultas no log, 126 domínios
+      normais, branch `ajustes-u3`). Passou a descrever o dataset-v2 (20.000
+      linhas, 59 colunas, gerador sem sufixo fixo).
 - [ ] Mergear a PR #2 (`docs/atualizar-readme-roadmap`) na `master` antes de
       15/12 e fazer a revisão final do README e do roteiro.
 - [ ] Sugerir, sem executar, os comandos `gh repo edit` e criação da tag
@@ -190,35 +156,42 @@ Mantidos para registro; não bloqueiam a entrega.
 ## Hipótese do híbrido
 
 Hipótese do autor: dar mais informação ao autoencoder para reconstruir aumenta
-a capacidade de separar domínios suspeitos. O que os dados atuais permitem
-dizer (uma seed, um split, avaliação no teto):
+a capacidade de separar domínios suspeitos. **Resultado no dataset-v2**
+(20.000 registros, retreino completo até o early stopping, 24/11/2026; uma
+seed, um split — ver bloco 4 para variância):
 
-- Os 42 atributos numéricos são calculados do próprio domínio (tamanho,
-  entropia, frequências). O ramo numérico recebe a mesma informação do ramo de
-  caracteres, reorganizada; não é informação nova.
-- Em `results/evaluation/ablation.md`, o score do híbrido só com o MSE dos
-  atributos tem ROC-AUC 0,9926 e recall 0,8389 a FPR ≤ 1%; com λ=4 o recall
-  a FPR ≤ 1% cai para 0,9888. Essas linhas mudam só a combinação do score, sem
-  retreinar.
-- No P99, o CharAE tem FPR 0,0000, contra 0,0093 do híbrido (λ=1) e 0,0187
-  com λ=0. Isso não indica ganho do treino conjunto, mas é uma seed.
-- Com ROC-AUC 1 nos dois, o teste não separa CharAE e híbrido (efeito de teto).
-- Ao acrescentar `.tunnel` a normais do teste
-  (`results/evaluation/suffix_control.csv`), o FPR do híbrido (0,4773) fica
-  abaixo do do CharAE (0,8341). Os limiares são calibrados em escalas
-  diferentes (4,41 e 3,14), então não dá para atribuir isso ao ramo numérico
-  sem um controle.
-- Prévia sem Docker (24/11/2026; gerador novo, uma seed, 800 épocas, não
-  versionada): o teto some (ROC-AUC 0,9997 no CharAE e 0,9972 no híbrido) e o
-  CharAE fica à frente ou empatado em seis das sete famílias; a exceção é
-  `low_entropy` (recall por domínio de 0,989 contra 0,997). Em `short` são 0,963
-  contra 0,850. No híbrido, somar o erro numérico piora: o recall vai de 0,9891
-  (λ=0) a 0,9650 (λ=1) e 0,7444 (λ=4). O melhor ponto de validação foi o limite
-  de épocas e o early stopping não disparou, então a comparação não está
-  fechada.
+- O teto de ROC-AUC 1 saiu do teste: CharAE 0,9997, HybridAE 0,9993 (teste por
+  registro, limiar P99). Os dois se separam de verdade, e **nenhum dos dois é
+  estritamente melhor**:
+  - **CharAE tem recall maior:** 0,9921 contra 0,9808 do HybridAE (28 falsos
+    negativos a menos).
+  - **HybridAE tem metade do FPR:** 0,0055 contra 0,0109 — 14 domínios
+    `normal_hard` sinalizados por engano, contra 28 do CharAE; os dois erram
+    exclusivamente em hashes de CDN (`results/evaluation/false_positives.csv`).
+  - **HybridAE generaliza melhor:** a razão entre o FPR do teste e o do treino
+    é 0,76× (sem sinal de sobreajuste) contra 3,02× do CharAE
+    (`results/evaluation/overfitting.csv`).
+- A ablação de λ (`results/evaluation/ablation.md`) mostra a troca: λ=0,25 dá
+  o maior recall (0,9953) com FPR 0,0105; λ=1 (o padrão) reduz o FPR para
+  0,0054 ao custo de recall 0,9807; λ=4 leva o FPR a 0,0031 mas o recall cai
+  para 0,8715. Mesmo λ=0 (só o erro lexical do encoder híbrido, sem usar o
+  ramo numérico no score) já tem menos FPR que o CharAE treinado separado
+  (0,0070 contra 0,0109): o ganho de generalização parece vir do treino
+  conjunto do encoder, não da soma do erro numérico ao score.
+- Isso não confirma a hipótese original (mais informação → mais recall): os
+  42 atributos continuam derivados do domínio, e o HybridAE tem recall menor,
+  não maior. O que o treino conjunto parece trazer é regularização: o híbrido
+  erra metade dos falsos positivos do CharAE nos mesmos hashes de CDN difíceis,
+  e generaliza melhor do treino para o teste. A escolha entre os dois depende
+  de priorizar recall (CharAE) ou FPR/estabilidade (HybridAE).
+- **Limites desta leitura:** uma seed, um split, um checkpoint por modo. O
+  bloco 4 lista o que falta para uma conclusão robusta (múltiplas seeds e
+  splits, intervalo de confiança).
 
-Para testar de verdade, veja o bloco 4 (várias seeds e um ramo com informação
-que não deriva do nome) e o bloco 3 (um dataset sem teto).
+Histórico desta hipótese: o dataset-v1 (9.911 registros, 100% das suspeitas em
+`.tunnel`) tinha ROC-AUC 1 nos dois modelos e não permitia comparação; uma
+prévia sem Docker, não versionada, já indicava que o teto sumia com o gerador
+novo, mas não tinha convergido (early stopping não disparado em 800 épocas).
 
 ## Critérios de aceitação
 
@@ -295,9 +268,9 @@ Status: **concluída**; modelos retreinados sem os indicadores de tipo DNS.
 
 ### Fase 2 — Dados
 
-Status: laboratório, dataset sintético e alinhamento logs-rótulos
-implementados; a regeneração do dataset versionado foi decidida em 24/11/2026
-e ainda não foi feita (bloco 3).
+Status: **concluída**; laboratório, gerador, alinhamento, regeneração e
+retreino (Fase 3) feitos em 24/11/2026. Resta só separar features de metadados
+do schema (bloco 3, baixa prioridade, exige dataset-v3).
 
 - [x] Corrigir o alinhamento entre logs e rótulos e documentar o tratamento de
       execuções concatenadas e duplicadas (`source/process_raw.py`: casa por
@@ -347,19 +320,30 @@ e ainda não foi feita (bloco 3).
 - [x] Gerar as anomalias sob zonas e sufixos de aparência normal, em vez de
       sempre `.tunnel` (`docker/generator/traffic_profiles.py`): 70% imitam a
       infraestrutura normal (`api.orbita`) e 30% usam uma zona própria
-      (`syncfeed`). Pronto no gerador; o dataset versionado ainda é o antigo.
+      (`syncfeed`).
 - [x] Corrigir a família `low_entropy` do gerador: o padrão repetido agora é
       sorteado e a família passou de 8 domínios únicos em 989 linhas para 699
       em 700 (`tests/test_traffic_profiles.py`). Foram criadas as famílias
       `dictionary` (palavras do vocabulário normal) e `short` (payload curto), e
-      payloads longos podem ir em duas etiquetas. Pronto no gerador; falta
-      regenerar o dataset.
+      payloads longos podem ir em duas etiquetas.
+- [x] Regenerar e versionar `data/processed/` com o gerador novo e o
+      alinhamento corrigido (24/11/2026): `QUERY_COUNT=20000`,
+      `ANOMALY_RATE=0,15` (também os novos padrões do `docker-compose.yml`),
+      `SEED=42`. Dataset-v2: 20.000 registros, 10.971 domínios únicos, nenhum
+      contém `tunnel`; alinhamento 20.000/20.000, sem lacunas. Os logs do
+      dataset-v1 ficam em `data/raw/archive/dataset-v1-2026-11-13/` (fora do
+      Git). O `docker-compose.yml` precisou de dois ajustes para subir no
+      Linux: `dockerfile:` em minúscula em cada `build:` (o compose procurava
+      `Dockerfile`) e os serviços dnsmasq/BIND9/Unbound passaram a criar o
+      próprio log no bind mount antes de trocar de usuário (senão o daemon não
+      conseguia escrever nele); o BIND9 também precisou de `named -u named`.
+- [x] Versionar `data/processed/alignment.json` junto com o dataset
+      regenerado (sem lacunas: `labels_without_log: 0`, `sequence_gaps: 0`).
 
 ### Fase 3 — Modelos, treino e avaliação
 
-Status: **concluída**; treino lexical, semântico (DenseAE) e híbrido, baselines
-e avaliação completa implementados. Resta diversificar os normais difíceis
-junto com a regeneração do dataset (bloco 3).
+Status: **concluída**; treino lexical, semântico (DenseAE) e híbrido,
+baselines, avaliação completa e retreino no dataset-v2 implementados.
 
 - [x] Implementar `DenseAE` para 42 atributos e score MSE (modo `semantic`).
 - [x] Implementar submodelo lexical independente com tokens, convoluções e
@@ -389,8 +373,8 @@ junto com a regeneração do dataset (bloco 3).
 - [x] Reportar precisão, recall, F1, FPR e ROC-AUC além da acurácia, com
       curvas ROC e precisão-recall (`results/evaluation/`).
 - [x] Reportar métricas por registro e por domínio único; investigar os
-      falsos positivos por domínio (híbrido no teste atual: 7 domínios
-      `normal_hard` parecidos com hashes de CDN no limiar P99).
+      falsos positivos por domínio (no dataset-v2, limiar P99: HybridAE erra
+      14 domínios `normal_hard`, CharAE erra 28, ambos só hashes de CDN).
 - [x] Avaliar leave-one-family-out sem escolher limiar no teste.
 - [x] Adicionar explicabilidade por atributo e por caractere
       (`source/explain.py`).
@@ -412,6 +396,12 @@ junto com a regeneração do dataset (bloco 3).
       reconstrução textual no modo semântico.
 - [x] Versionar a avaliação completa em `results/evaluation/` (22 artefatos),
       para que os números do README sejam verificáveis.
+- [x] Retreinar os três modelos sobre o dataset-v2 e reavaliar (24/11/2026):
+      `--fresh`, até 3.000 épocas; early stopping disparou no CharAE (2.955,
+      melhor 2.755) e no HybridAE (2.770, melhor 2.570); o DenseAE rodou as
+      3.000 sem parar. Reconferidas célula a célula as tabelas do README contra
+      `results/evaluation/metrics.csv`. Os checkpoints do dataset-v1 ficam no
+      histórico do git; backups locais em `*.pt.bak` (fora do Git).
 
 ### Fase 4 — Demonstração
 
@@ -432,6 +422,9 @@ declara métricas sem teste independente.
       `doc/aplicacoes.md` e o protocolo em `doc/fine-tuning.md`.
 - [x] Implementar `--replay <log>` para apresentação sem Docker, incluindo um
       exemplo versionado em `scripts/demo/replay-example.txt` e saída JSON.
+      Atualizado em 24/11/2026 com domínios do dataset-v2 (os antigos, em
+      `.tunnel`, não existem mais no split de teste); `source/gradio_demo.py`
+      e `scripts/demo/normal-example.txt` também trocaram de exemplos.
 - [x] Exibir score, classificação e mapa de erro por caractere.
 - [x] Disponibilizar dashboard local em `http://127.0.0.1:8080`.
 - [x] Monitorar aplicações, serviços, rotas, erros e latência no dashboard.
@@ -485,8 +478,16 @@ a entrega na `master` (blocos 2 e 5).
 - [x] Atualizar referências apenas para fontes realmente utilizadas.
 - [x] Versionar os resultados gráficos dos treinamentos lexical, semântico e
       híbrido produzidos localmente.
+- [x] Atualizar `.github/copilot-instructions.md`, que descrevia um estado de
+      08/11/2026 (50.000 linhas, 60.000 consultas no log, 126 domínios
+      normais, branch `ajustes-u3`). Passou a descrever o dataset-v2.
 
 ### Fase 6 — Robustez (nova)
 
-Status: planejada; nenhum item concluído. Os itens estão nos blocos 3 e 4 das
-pendências e dependem da regeneração do dataset.
+Status: a regeneração e o retreino (itens abaixo) estão feitos; falta
+variância (múltiplas seeds/splits) e CI, que seguem no bloco 4 das pendências.
+
+- [x] Regenerar `data/processed/` com o alinhamento corrigido e retreinar os
+      três modelos (24/11/2026) — ver o histórico das Fases 2 e 3 para os
+      números. Isso também fecha o teto de ROC-AUC 1 que impedia comparar
+      CharAE e híbrido (ver [Hipótese do híbrido](#hipótese-do-híbrido)).
