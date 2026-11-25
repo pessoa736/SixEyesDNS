@@ -10,113 +10,78 @@ license: mit
 
 # SixEyesDNS
 
-Detector educacional de consultas DNS anômalas com autoencoders. Projeto da
-Unidade III de **Aprendizado Profundo 2026.2**, categoria **Autoencoders para
-Anomalias e Ruído**. O [requisito da disciplina](doc/info/Descricao_do_Trabalho.md)
-está no repositório.
+**Detecção de Anomalias em Consultas DNS com Autoencoders para Identificação de
+Tunelamento e Exfiltração de Dados**
 
-## Introdução
+Davi dos Santos Passos · Aprendizado Profundo 2026.2, Unidade III · categoria
+*Autoencoders para Anomalias e Ruído* · [requisitos](doc/info/Descricao_do_Trabalho.md)
+· [roteiro](doc/roteiro-apresentacao.md) · [roadmap](roadmap.md)
 
-Tunelamento DNS pode esconder dados em nomes de domínio. O SixEyesDNS aprende a
-reconstruir consultas normais e usa o erro de reconstrução para sinalizar nomes
-fora do padrão. O laboratório gera somente tráfego sintético `.test`; nenhum
-servidor consulta a Internet.
+## 1. Introdução
 
-O modelo analisa **somente o domínio**. IP, cliente, rótulo, família e tipo DNS
-são metadados, não features. Por isso trocar `A` por `TXT` sem mudar o domínio
-não altera o score — uma decisão contra atalhos como “TXT é suspeito”, não um
-bug da demonstração.
+Tunelamento DNS esconde dados em nomes de domínio (subdomínios longos em base32,
+hex ou base64) e aproveita que o DNS quase sempre atravessa o firewall. Como há
+poucos ataques rotulados, o projeto aprende como é o tráfego **normal**: um
+autoencoder treinado só com consultas normais usa o **erro de reconstrução** como
+score de anomalia. O modelo vê somente o **nome** da consulta (IP, cliente, rótulo
+e tipo DNS não são features) e o tráfego é sintético, local e `.test`. O score
+serve para **priorizar análise humana**, não para bloquear.
 
-## Demonstração
+## 2. Desenvolvimento e técnicas
 
-### Gradio e Hugging Face Space
-
-```bash
-./scripts/demo/gradio.sh
-# http://127.0.0.1:7860
-```
-
-A interface oferece duas operações:
-
-- **Testar modelo:** escolher HybridAE, CharAE ou DenseAE, informar um domínio e
-  ver score, limiar P99, heatmap por caractere e erros por atributo.
-- **Fine-tuning com log normal:** adaptar uma cópia do checkpoint com dnsmasq,
-  BIND9 ou Unbound e baixar o novo `model.pt`.
-
-O log de adaptação precisa conter **somente normais confirmados**. Anomalias no
-arquivo ensinam o autoencoder a reconstruir o túnel como legítimo. A adaptação
-separa domínios entre treino e validação, ajusta o scaler no treino, escolhe o
-melhor checkpoint pela validação e recalcula o P99 nela. Não produz acurácia de
-teste: isso exige dados independentes. Veja o [protocolo completo](doc/fine-tuning.md).
-A aba traz um log normal pronto para testar (`scripts/demo/normal-example.txt`,
-600 domínios únicos do laboratório).
-
-![Fluxo da demonstração e da adaptação](doc/figures/demo.png)
-
-O repositório contém `app.py`, os checkpoints e os metadados do Space. Para
-publicar, crie um Space Gradio, monte a pasta com só o que o app usa (código,
-checkpoints e exemplos, sem dados nem figuras) e envie-a com a CLI do Hub:
-
-```bash
-./scripts/demo/space-bundle.sh        # gera build/space
-hf auth login                         # token do Hub, fora do repositório
-hf upload <usuario>/<space> build/space . --repo-type=space --exclude .space-bundle
-```
-
-Em vez de `git push`, que levaria o histórico inteiro com PNG, GIF e dados, o
-`hf upload` envia só a pasta gerada. A publicação não é automática. Nenhum Space
-público é presumido neste README.
-
-### Replay offline no terminal
-
-A classificação de logs, separada do fine-tuning, continua disponível sem Docker:
-
-```bash
-./scripts/demo/demo.sh
-LIMIT=2 ./scripts/demo/demo.sh
-REPLAY_LOG=data/raw/dnsmasq/dnsmasq.log LIMIT=20 ./scripts/demo/demo.sh
-```
-
-O exemplo versionado contém nove consultas do teste e inclui um falso positivo
-conhecido. Use `--json` para obter o relatório completo.
-
-## Desenvolvimento e técnicas
+### 2.1 Laboratório e dados
 
 ![Pipeline do projeto](doc/figures/pipeline.png)
 
-O pipeline reúne laboratório Docker, logs dnsmasq/BIND9/Unbound, alinhamento de
-logs e rótulos, splits sem interseção de domínios, três autoencoders, avaliação
-e demonstração. O dataset versionado (dataset-v2, 24/11/2026) tem 20.000
-registros e 10.971 domínios únicos, com anomalias sem sufixo fixo e
-prevalência de suspeitas de 15% na geração. A versão anterior (dataset-v1, com
-9.911 registros e todas as suspeitas em `.tunnel`) fica no histórico do git.
+Um gerador consulta dnsmasq, BIND9 e Unbound em Docker; os logs são alinhados aos
+rótulos (`source/process_raw.py`) e divididos em treino, validação e teste **sem
+domínio repetido entre eles**. O dataset-v2 (24/11/2026) tem 20.000 registros e
+10.971 domínios únicos, com 15% de suspeitas (37,1% no teste) em sete famílias
+(`base32`, `hex`, `base64`, `mixed`, `low_entropy`, `dictionary`, `short`) **sem
+sufixo fixo**. O dataset anterior tinha todas as suspeitas em `.tunnel`, um atalho
+medido e removido ([roadmap](roadmap.md)). Mais em [doc/laboratorio.md](doc/laboratorio.md).
 
-### Representação e modelos
-
-- 64 posições de caracteres e 42 atributos lexicais: seis escalares e 36
-  frequências de `a-z`/`0-9`.
-- **DenseAE:** reconstrói os atributos e usa MSE.
-- **CharAE:** reconstrói a sequência e usa entropia cruzada por posição real.
-- **HybridAE:** combina `z(CE) + lambda*z(MSE)` com estatísticas dos normais da
-  validação.
-- Entropia de Shannon e Isolation Forest servem como baselines.
+### 2.2 Modelos e treino
 
 ![Arquiteturas comparadas](doc/figures/architectures.png)
 
-O treino usa Adam, seed 42, somente normais do treino, máscara/ruído de entrada e
-early stopping pela validação. O checkpoint guarda pesos, scaler, vocabulário,
-arquitetura, estatísticas e limiar. GPU é preferida quando disponível; CPU é o
-fallback automático.
+Entrada: 64 caracteres e 42 atributos lexicais; espaço latente de 16 dimensões.
+**DenseAE** reconstrói os atributos (score = MSE); **CharAE** reconstrói a
+sequência (entropia cruzada); **HybridAE** combina os dois, `z(CE) + λ·z(MSE)` com λ = 1.
+Baselines: entropia de Shannon e Isolation Forest. Treino com Adam, seed 42, só
+com normais, máscara e ruído na entrada e early stopping; o limiar é o **P99 dos
+normais da validação** e o teste nunca o escolhe ([doc/arquitetura.md](doc/arquitetura.md)).
 
-![Fluxo de treino](doc/figures/training.png)
+### 2.3 Nomes reais: o ranking Tranco
 
-Detalhes de [arquitetura](doc/arquitetura.md) e do
-[laboratório/processamento](doc/laboratorio.md) ficam fora deste resumo.
+O vocabulário do gerador é fechado (serviços e organizações fictícios). O gerador
+aceita um recorte local do [ranking Tranco](https://tranco-list.eu/)
+(`data/external/`, fora do Git): até 2.000 domínios entram em 15% das consultas
+normais como `<domínio>.test` (perfil `normal_tranco`). O Tranco mede
+**popularidade, não segurança**, e não diz quais domínios são acessados juntos. A
+lista de 24/11/2026 (ID `JZW4Y`) foi baixada, mas **o dataset-v2 foi gerado sem
+ela**. `python -m source.external_check` trata os 2.000 primeiros nomes como
+normais e mede a fração sinalizada (P99, por domínio único):
 
-## Resultados
+| Sistema | normais do teste | top-2000 Tranco | mesmos nomes, TLD do laboratório |
+|---|---:|---:|---:|
+| CharAE | 2,3% | 99,95% | 95,8% |
+| HybridAE | 1,2% | 99,9% | 88,1% |
+| DenseAE | 1,1% | 60,9% | 25,9% |
 
-Teste por registro, limiar P99 dos normais da validação. Fonte:
-[`results/evaluation/metrics.csv`](results/evaluation/metrics.csv).
+Trocar o TLD real ajuda pouco nos autoencoders de caracteres: o problema é
+sobretudo o vocabulário. Misturar o Tranco é o próximo passo, e as anomalias também precisam usar TLDs reais, senão o TLD separa
+as classes (o erro do `.tunnel`). Fonte e filtros: [data/external/README.md](data/external/README.md).
+
+### 2.4 Demonstração
+
+`./scripts/demo/gradio.sh` abre uma interface para classificar um domínio (com
+mapa de erro por caractere) e para **adaptar** o modelo a um log normal do próprio
+ambiente. Publicação no Space: [doc/demonstracao.md](doc/demonstracao.md).
+
+## 3. Resultados
+
+Teste por registro, limiar P99 ([`metrics.csv`](results/evaluation/metrics.csv)):
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
@@ -126,126 +91,72 @@ Teste por registro, limiar P99 dos normais da validação. Fonte:
 | CharAE | 0.9817 | 0.9921 | 0.9868 | 0.0109 | 0.9997 |
 | HybridAE | 0.9906 | 0.9808 | 0.9857 | 0.0055 | 0.9993 |
 
-Com o dataset mais difícil (dataset-v2), o teto de ROC-AUC 1 sai do teste e os
-dois autoencoders de caracteres se separam: o CharAE tem recall maior
-(0,9921 contra 0,9808), mas o HybridAE tem a metade do FPR (0,0055 contra
-0,0109) — 14 domínios `normal_hard` sinalizados por engano contra 28, sempre
-hashes de CDN. O HybridAE também generaliza melhor: a razão entre o FPR do
-teste e o do treino é 0,76× (sem sinal de sobreajuste), contra 3,02× do CharAE
-(ver [overfitting.csv](results/evaluation/overfitting.csv)). Nenhum dos dois é
-estritamente melhor; a escolha depende de priorizar recall ou FPR.
+Os autoencoders de caracteres superam os baselines e se separam: o **CharAE tem
+mais recall** (0,9921 contra 0,9808); o **HybridAE tem metade do FPR** (14 falsos
+positivos contra 28, todos hashes de CDN) e generaliza melhor (FPR teste/treino de
+0,76× contra 3,02×, [`overfitting.csv`](results/evaluation/overfitting.csv)).
+Nenhum é estritamente melhor. O teste tem 37,1% de suspeitas, muito acima do
+tráfego real: com 1% de suspeitas a precisão esperada do HybridAE cai para 0,64 e,
+com 0,1%, para 0,15. Demais tabelas: [`summary.md`](results/evaluation/summary.md).
 
-O teste tem 37,1% de suspeitas, ainda acima do esperado em tráfego real. Com
-recall 0,9808 e FPR 0,0055, a precisão esperada do HybridAE cai para **0,6446
-com 1% de suspeitas** e **0,1524 com 0,1%**. F1 alto não basta para decidir uso
-real.
+## 4. Análise crítica
 
-As tabelas por registro/domínio, as duas políticas de limiar, ablação, LOFO,
-prevalência, explicabilidade e falsos positivos estão em
-[`results/evaluation/summary.md`](results/evaluation/summary.md) e nos demais
-artefatos de [`results/evaluation/`](results/evaluation/).
+- **Nomes reais (medido):** o detector sinaliza 99,9% a 99,95% dos nomes populares
+  do Tranco (seção 2.3), o que indica que decorou o vocabulário do laboratório e,
+  sem adaptação ao ambiente, não serve para tráfego real. Não medi ainda se o
+  fine-tuning resolve.
+- **Dataset sintético, uma seed, um split:** sem intervalo de confiança; os splits
+  compartilham os moldes do gerador.
+- **Falsos positivos:** hashes legítimos de CDN parecem payloads
+  (`6222f8b896.cdn.nuvem`); com ataques raros, a maioria dos alertas seria falsa.
+- **Fine-tuning:** um log contaminado ensina o modelo a reconstruir o túnel.
+- **Escopo lexical:** não vê resposta, volume nem tempo e não prova exfiltração.
 
-## Aplicações na vida real
+## 5. Conclusões
 
-O projeto pode ser usado como **sinal auxiliar de priorização**, não como prova
-de ataque:
-
-1. **Triagem em SOC:** ordenar logs por score para um analista revisar primeiro
-   os nomes mais anômalos, junto de ativo, destino e outras evidências.
-2. **Baseline de uma rede:** adaptar o modelo a normais confirmados de um
-   ambiente e detectar mudanças de padrão, com validação independente.
-3. **Observabilidade em resolvedor/gateway:** exportar score e explicações para
-   SIEM ou outra ferramenta, sem bloquear automaticamente.
-4. **Pesquisa e ensino:** reproduzir famílias sintéticas, medir FPR e estudar o
-   mecanismo de autoencoders sem tráfego contra terceiros.
-
-Ele não detecta todo túnel: domínios lexicalmente comuns, payload somente na
-resposta, tráfego direto por IP e nomes invisíveis ao ponto de coleta ficam fora
-do alcance. DoH/DoT exige instrumentar um ponto que veja os domínios. Integrações
-com Zeek, Suricata ou SIEM seriam por logs/API própria; o projeto ainda não é um
-plugin desses sistemas.
-
-O [guia de aplicações reais](doc/aplicacoes.md) detalha arquitetura de
-implantação, privacidade, limites e o protocolo para uma prova de conceito.
-
-## Análise crítica
-
-- **Dataset sintético e fácil:** ROC-AUC 1 no laboratório não comprova eficácia
-  em tráfego real.
-- **Similaridade de moldes:** splits não repetem domínios, mas compartilham
-  padrões do gerador. A diversidade dos normais é o gargalo principal.
-- **Falsos positivos:** hashes legítimos de CDN podem parecer payloads; o
-  exemplo `6222f8b896.cdn.nuvem` deixa isso visível na demo.
-- **Prevalência:** com ataques raros, a maioria dos alertas pode ser falsa.
-- **Uma seed e um split:** faltam intervalos de confiança e avaliação temporal.
-- **Fine-tuning contaminado:** adaptar com anomalias pode destruir a utilidade
-  do detector. Validação de treino não substitui teste independente.
-- **Escopo lexical:** o modelo não vê conteúdo da resposta nem prova exfiltração.
-
-## Conclusões
-
-1. CharAE e HybridAE superam os baselines neste conjunto. Nenhum dos dois é
-   estritamente melhor: o CharAE tem recall maior, o HybridAE tem metade do
-   FPR e generaliza melhor para domínios não vistos (ver
-   [Hipótese do híbrido](roadmap.md#hipótese-do-híbrido)).
-2. O limiar e a prevalência importam tanto quanto a arquitetura. F1 isolado
-   distorce a leitura quando a distribuição real é desbalanceada.
-3. O projeto entrega um laboratório, um método auditável, uma interface Gradio
-   e um mecanismo controlado de adaptação — não um produto pronto para bloqueio.
-4. A aplicação mais responsável hoje é priorização para análise humana. Uso real
-   exige dados do ambiente, teste independente, múltiplas seeds/períodos e
-   governança dos logs.
+1. CharAE e HybridAE superam os baselines e nenhum é estritamente melhor
+   ([hipótese do híbrido](roadmap.md#hipótese-do-híbrido)). Limiar e prevalência
+   pesam tanto quanto a arquitetura.
+2. Os dois controles (`.tunnel` e Tranco) indicam um detector de novidade: o que é
+   "normal" vem inteiro dos dados de treino.
+3. Uso responsável hoje: priorizar análise humana num ambiente conhecido, depois
+   de adaptar o modelo ([aplicações e limites](doc/aplicacoes.md)). Próximos
+   passos: Tranco com anomalias de TLD real, várias seeds e medir a adaptação.
 
 ## Como reproduzir
 
 ```bash
-conda env create -f environment.yml
-conda activate sixeyesdns
-
-./scripts/model/train-lexical.sh
-./scripts/model/train-semantic.sh
-./scripts/model/train-hybrid.sh
+conda env create -f environment.yml && conda activate sixeyesdns
+./scripts/model/train-hybrid.sh        # e train-lexical.sh, train-semantic.sh
 ./scripts/evaluate/evaluate.sh
+python -m source.external_check        # exige data/external/tranco_top.csv
 python -m pytest -q
 ```
 
-Para recriar os dados sintéticos, consulte [doc/laboratorio.md](doc/laboratorio.md).
-As figuras da documentação são PNGs gerados com Matplotlib, sem Mermaid:
+Dados: [doc/laboratorio.md](doc/laboratorio.md). Figuras: `python -m source.doc_figures`.
 
-```bash
-python -m source.doc_figures
-```
+### Treino em GPU
 
-## Estrutura principal
-
-```text
-app.py                    # entrada do Space Gradio
-source/                   # features, modelos, treino, avaliação e demos
-scripts/demo/             # Gradio e replay offline
-data/processed/           # dataset e splits versionados
-results/                  # checkpoints e avaliação verificável
-doc/                      # guias e figuras Matplotlib
-tests/                    # testes unitários e de integração
-```
+`--device auto` (padrão) usa GPU NVIDIA (CUDA) ou AMD (ROCm) quando o PyTorch a
+enxerga e cai para CPU; `DEVICE=cpu` dá execução determinística. O `torch` do PyPI
+é a build CUDA: em GPU AMD instale a ROCm
+(`pip install torch --index-url https://download.pytorch.org/whl/rocm7.2`).
+Treinos longos aquecem a GPU: acompanhe a temperatura.
 
 ## Segurança e ética
 
-- Tráfego apenas local, sintético e `.test`; nenhuma exfiltração real.
-- Não versionar credenciais, dados pessoais ou datasets externos.
-- Logs DNS são sensíveis: retenção, acesso e finalidade precisam de governança.
-- O score prioriza investigação; não é prova de ataque nem autorização para
-  bloqueio automático.
+Tráfego apenas local, sintético e `.test`; nenhuma exfiltração real. Sem
+credenciais, dados pessoais nem datasets externos no Git (o Tranco fica fora). Logs
+DNS são sensíveis e o score não autoriza bloqueio automático.
 
 ## Referências
 
-- [PyTorch](https://pytorch.org/) — modelos e inferência.
-- [scikit-learn](https://scikit-learn.org/) — scaler e Isolation Forest.
-- [NumPy](https://numpy.org/) e [Matplotlib](https://matplotlib.org/) — cálculo
-  e figuras, incluindo os diagramas desta documentação.
-- [Gradio](https://www.gradio.app/) — interface web e Space.
-- [Dnsmasq](http://thekelleys.org.uk/dnsmasq/),
-  [BIND9](https://www.isc.org/bind/),
-  [Unbound](https://nlnetlabs.nl/projects/unbound/) e
-  [Kea](https://kea.isc.org/) — laboratório local.
-- [Tranco](https://tranco.org/) — ranking opcional, somente quando fornecido
-  localmente pelo autor.
+- V. Le Pochat, T. Van Goethem, S. Tajalizadehkhoob, M. Korczyński e W. Joosen,
+  [*Tranco: A Research-Oriented Top Sites Ranking Hardened Against
+  Manipulation*](https://tranco-list.eu/assets/tranco-ndss19.pdf), NDSS 2019;
+  lista usada: ID `JZW4Y`, 24/11/2026.
+- [PyTorch](https://pytorch.org/), [scikit-learn](https://scikit-learn.org/),
+  [NumPy](https://numpy.org/), [Matplotlib](https://matplotlib.org/) e
+  [Gradio](https://www.gradio.app/); laboratório com
+  [Dnsmasq](http://thekelleys.org.uk/dnsmasq/), [BIND9](https://www.isc.org/bind/),
+  [Unbound](https://nlnetlabs.nl/projects/unbound/) e [Kea](https://kea.isc.org/).
