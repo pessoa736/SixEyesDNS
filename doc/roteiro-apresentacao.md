@@ -45,9 +45,10 @@ Mostrar `doc/figures/pipeline.png` e percorrer da esquerda para a direita:
 
 1. **Laboratório:** gerador de consultas, dnsmasq, BIND9, Unbound e Kea em
    Docker, sem sair para a Internet.
-2. **Dados:** logs alinhados aos rótulos, 9.911 registros e 6.924 domínios
-   únicos. O treino usa só os 3.482 registros normais do split de treino; a
-   validação e o teste têm normais e suspeitas.
+2. **Dados:** logs alinhados aos rótulos, 20.000 registros e 10.971 domínios
+   únicos (dataset-v2, 24/11/2026; `ANOMALY_RATE=0,15`). O treino usa só os
+   11.901 registros normais do split de treino; a validação e o teste têm
+   normais e suspeitas.
 3. **Splits sem interseção de domínios**, verificada em tempo de execução.
 4. **Modelos, avaliação e demonstração.**
 
@@ -74,11 +75,11 @@ Mostrar `doc/figures/architectures.png`.
   validação.
 
 **Hipótese que motivou o híbrido, dita com honestidade:** dar mais informação
-para reconstruir deveria ajudar a achar suspeitas. Os dados atuais não mostram
-isso. Os 42 atributos são calculados do próprio domínio, então o ramo numérico
-recebe a mesma informação, reorganizada, e o CharAE já separa tudo. Para
-testar de verdade seria preciso um dataset mais difícil e informação que não
-derive do nome. Isso está no [roadmap](../roadmap.md#hipótese-do-híbrido).
+para reconstruir deveria ajudar a achar suspeitas. Os dados não confirmam essa
+forma da hipótese — o HybridAE tem recall *menor* que o CharAE, não maior —,
+mas mostram outra coisa: o HybridAE erra metade dos falsos positivos (14
+contra 28, mesmos hashes de CDN) e generaliza melhor do treino para o teste.
+Detalhes no [roadmap](../roadmap.md#hipótese-do-híbrido).
 
 ## 4. Resultados e análise crítica (3 min)
 
@@ -86,64 +87,69 @@ Mostrar a tabela do README (teste por registro, limiar P99):
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
-| Entropia | 0.9838 | 0.1873 | 0.3147 | 0.0107 | 0.6712 |
-| Isolation Forest | 0.9840 | 0.4513 | 0.6188 | 0.0254 | 0.9396 |
-| DenseAE | 0.9986 | 0.5592 | 0.7169 | 0.0027 | 0.9901 |
-| CharAE | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 |
-| HybridAE | 0.9973 | 1.0000 | 0.9987 | 0.0093 | 1.0000 |
+| Entropia | 0.9174 | 0.3384 | 0.4944 | 0.0179 | 0.7613 |
+| Isolation Forest | 0.8936 | 0.3225 | 0.4740 | 0.0226 | 0.8116 |
+| DenseAE | 0.9811 | 0.4477 | 0.6148 | 0.0051 | 0.9492 |
+| CharAE | 0.9817 | 0.9921 | 0.9868 | 0.0109 | 0.9997 |
+| HybridAE | 0.9906 | 0.9808 | 0.9857 | 0.0055 | 0.9993 |
 
 Pontos a falar:
 
 - Os autoencoders de caracteres superam os baselines por uma margem grande.
-- O CharAE não erra no teste. O HybridAE acha as mesmas 2.595 suspeitas, mas
-  sinaliza **7 domínios normais** (`normal_hard`, parecidos com hashes de CDN).
-  Portanto o híbrido **não** é "o melhor modelo".
-- **Prevalência** (`results/evaluation/prevalence.png`): o teste tem 77,6% de
-  suspeitas. Com recall 1 e FPR 0,0093, a precisão esperada do híbrido cai para
-  **0,5194 com 1%** de suspeitas e **0,0967 com 0,1%**. F1 alto não basta.
+- Com este dataset mais difícil, o teto de ROC-AUC 1 sai do teste e os dois
+  autoencoders de caracteres se separam: **CharAE tem recall maior** (0,9921
+  contra 0,9808), **HybridAE tem metade do FPR** (0,0055 contra 0,0109 — 14
+  domínios `normal_hard` sinalizados por engano, contra 28). Nenhum dos dois
+  é estritamente melhor.
+- **Prevalência** (`results/evaluation/prevalence.png`): o teste tem 37,1% de
+  suspeitas. Com recall 0,9808 e FPR 0,0055, a precisão esperada do HybridAE
+  cai para **0,6446 com 1%** de suspeitas e **0,1524 com 0,1%**. F1 alto não
+  basta.
 
 Análise crítica, sem esconder:
 
-- ROC-AUC 1 num dataset sintético **não** prova eficácia em tráfego real. Os
-  splits não repetem domínios, mas os normais compartilham moldes com o treino
-  (mediana de similaridade 0,64 contra 0,06 das suspeitas).
-- Uma seed e um split, sem intervalo de confiança.
-- **Atalho no gerador:** 100% das suspeitas terminam em `.tunnel` e nenhum
-  normal contém `tunnel`. O controle (`results/evaluation/suffix_control.csv`)
-  mostra que o sufixo não é necessário (recall do CharAE e do híbrido segue em
-  1,0000 com sufixo normal), mas é suficiente: acrescentá-lo a normais do teste
-  leva o FPR do CharAE a 0,8341 e o do híbrido a 0,4773. O detector reage a
-  qualquer trecho nunca visto no treino.
-- A família `low_entropy` do gerador produz só **8 domínios únicos** em 989
-  linhas; o recall dela não tem poder estatístico.
+- ROC-AUC alto num dataset sintético **não** prova eficácia em tráfego real,
+  mesmo sem o teto de 1,0 do dataset anterior. Os splits não repetem
+  domínios, mas os normais compartilham moldes com o gerador.
+- Uma seed e um split, sem intervalo de confiança: o roadmap lista isso como
+  próximo passo.
+- **Correção no gerador:** o dataset-v1 tinha um atalho (100% das suspeitas em
+  `.tunnel`); o gerador atual não usa sufixo fixo — a zona imita a
+  infraestrutura normal (70%) ou é uma zona própria (30%).
+- Todos os falsos positivos, nos dois modelos, são do perfil `normal_hard`
+  (hashes de CDN): o detector reage a trechos de alta entropia nunca vistos
+  no treino, legítimos ou não.
 - O modelo não vê a resposta DNS nem prova exfiltração.
 
 Fechamento: a aplicação responsável hoje é **priorização para análise
-humana**. O próximo passo é regenerar um dataset mais variado e realista e
-comparar CharAE e híbrido com várias seeds.
+humana**. O próximo passo é comparar CharAE e híbrido com várias seeds e
+splits, para saber se a diferença de recall e FPR é estável.
 
 ## 5. Demonstração no Space (1,5 min)
 
-Valores medidos em CPU em 24/11/2026 com o checkpoint híbrido (limiar P99 de
-4,4130). No Space podem variar nas últimas casas.
+Valores medidos em CPU em 24/11/2026 com o checkpoint híbrido retreinado no
+dataset-v2 (limiar P99 de 5,7159; via `--replay scripts/demo/replay-example.txt`).
+No Space podem variar nas últimas casas.
 
 **Aba "Testar modelo" (cerca de 1 min):**
 
 | Domínio | Esperado | Score |
 |---|---|---:|
-| `staging.api.orbita.test` | normal | −1,359 |
-| `aaj4pccnvdeac.tunnel.test` | suspeita | 7,553 |
-| `7c2a488f471558ea9c7d162f.tunnel.test` | suspeita | 16,336 |
-| `f4bfff32c5.cdn.brisa.test` | **suspeita (falso positivo conhecido)** | 6,821 |
+| `canary.mail.cobalto.test` | normal | −0,847 |
+| `aen6dyl46u.eu-west.cdn.cobalto.test` | suspeita (`short`, sem `.tunnel`) | 9,410 |
+| `ddddddddddddddddddddddd.metricsink.test` | suspeita (`low_entropy`) | 43,088 |
+| `6222f8b896.cdn.nuvem.test` | **suspeita (falso positivo conhecido)** | 7,406 |
 
-- Mostrar o mapa de erro por caractere. No túnel o erro cobre o payload **e** o
-  sufixo `tunnel` (que nunca aparece em normais); no falso positivo da CDN só
-  o hash acende e o resto fica em zero.
+- Mostrar o mapa de erro por caractere. No segundo exemplo o erro se concentra
+  no prefixo aleatório `aen6dyl46u`, não na zona `cdn.cobalto` — que imita
+  infraestrutura real e nunca tem sufixo fixo; no falso positivo da CDN só o
+  hash `6222f8b896` acende e o resto fica em zero.
+- Destacar o terceiro exemplo: nenhuma suspeita no dataset-v2 termina em
+  `.tunnel` ou em qualquer sufixo fixo; o gerador varia a zona (70% imita
+  infraestrutura normal, 30% usa zona própria do atacante).
 - Parar no último exemplo: é um hash de CDN legítimo e ilustra a análise
-  crítica.
-- Opcional, digitando na caixa: `aaj4pccnvdeac.api.orbita.test`, o mesmo
-  payload com sufixo de serviço normal. Em 24/11/2026 o híbrido deu suspeita
-  (score 8,7 contra limiar 4,41): o detector não depende do sufixo `.tunnel`.
+  crítica — o detector reage a alta entropia nunca vista no treino, legítima
+  ou não.
 - Trocar para **DenseAE** e mostrar que não há mapa por caractere (ele só
   reconstrói atributos).
 
@@ -157,17 +163,21 @@ Se o Space estiver lento, não esperar: pular o fine-tuning e mostrar a captura.
 
 ## Perguntas prováveis
 
-- **"ROC-AUC 1 não é suspeito?"** É, e o README diz isso: dataset sintético,
-  moldes compartilhados, uma seed. Por isso a análise de prevalência.
-- **"Por que defender o híbrido se o CharAE é melhor?"** A hipótese era mais
-  informação, mas os atributos derivam do domínio. Está testada só em um
-  dataset de teto; o roadmap prevê um dataset mais difícil e várias seeds.
+- **"ROC-AUC alto não é suspeito?"** Ainda é um dataset sintético com moldes
+  compartilhados e uma seed, mesmo sem o teto de 1,0 que o dataset anterior
+  tinha. Por isso a análise de prevalência.
+- **"CharAE ou HybridAE: qual é melhor?"** Nenhum dos dois estritamente: o
+  CharAE tem recall maior (0,9921 contra 0,9808), o HybridAE tem metade do FPR
+  (0,0055 contra 0,0109) e generaliza melhor do treino para o teste. A escolha
+  depende de priorizar recall ou FPR. Uma seed e um split; o roadmap prevê
+  múltiplas seeds para fechar essa comparação.
 - **"Funciona em tráfego real?"** Não foi testado. Só há laboratório sintético.
-- **"O modelo não está só aprendendo o sufixo `.tunnel`?"** O gerador marca
-  todas as suspeitas com ele, então a dúvida é justa. Trocando o sufixo por um
-  de aparência normal o recall não cai (CharAE e híbrido, 1,0000). Mas o
-  inverso também vale: pôr `.tunnel` em um normal já o torna suspeito. O
-  detector é, em parte, um detector de novidade.
+- **"O modelo não está aprendendo algum atalho do gerador?"** Era o caso do
+  dataset anterior: 100% das suspeitas terminavam em `.tunnel`, e um controle
+  (`results/archive/dataset-v1/suffix_control.csv`) mostrou que acrescentar o
+  sufixo a normais levava o FPR a 0,83 (CharAE). O gerador atual não usa
+  sufixo fixo — por isso essa auditoria foi feita e por isso o dataset foi
+  regenerado.
 - **"Por que o tipo DNS não é feature?"** Seria um atalho ("TXT é suspeito") e
   não generaliza. Mudar `A` para `TXT` não altera o score.
 - **"O fine-tuning melhora o detector?"** Não sabemos: a validação só escolhe o

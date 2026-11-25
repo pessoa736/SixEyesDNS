@@ -11,9 +11,10 @@ Não há upstream externo.
 docker compose wait generator
 ```
 
-Variáveis principais: `QUERY_COUNT=10000`, `ANOMALY_RATE=0.5`, `SEED=42`,
-`QUERY_INTERVAL=0.01` e `DNS_TARGETS=resolver:70,dnsmasq:20,bind9:10`. O dashboard
-fica em `http://127.0.0.1:8080`; a consulta DNS publicada no host usa a porta
+Variáveis principais: `QUERY_COUNT=20000`, `ANOMALY_RATE=0.15`, `SEED=42`,
+`QUERY_INTERVAL=0.01` e `DNS_TARGETS=resolver:70,dnsmasq:20,bind9:10` (padrões
+do `docker-compose.yml` desde o dataset-v2, 24/11/2026). O dashboard fica em
+`http://127.0.0.1:8080`; a consulta DNS publicada no host usa a porta
 `127.0.0.1:6767`.
 
 ## Perfis do gerador
@@ -30,12 +31,14 @@ fica em `http://127.0.0.1:8080`; a consulta DNS publicada no host usa a porta
   ferramentas de infraestrutura pouco frequentes, hashes de CDN e os perfis
   temáticos.
 - **Prevalência:** é parâmetro de execução (`ANOMALY_RATE`); o padrão do compose
-  continua 0,5.
+  passou de 0,5 para 0,15 no dataset-v2.
 
-O dataset versionado em `data/processed/` foi gerado **antes** dessa mudança: nele
-todas as suspeitas terminam em `.tunnel` e a `low_entropy` tem 8 domínios únicos
-(veja `results/evaluation/suffix_control.csv`). Ele só passa a refletir o gerador
-novo quando for regenerado.
+O dataset versionado em `data/processed/` (dataset-v2, 24/11/2026) já usa esse
+gerador: nenhuma suspeita contém `tunnel` e a `low_entropy` tem 699 domínios
+únicos em 700 linhas. O dataset-v1 (sufixo fixo, `low_entropy` com 8 domínios)
+fica no histórico do git; o controle de atalho medido nele está em
+`results/archive/dataset-v1/suffix_control.csv` e não se aplica ao dataset
+atual.
 
 ## Processamento
 
@@ -47,13 +50,12 @@ concatenados. Ele não alinha arquivos apenas pela posição das linhas.
 ./scripts/data/process-data.sh
 ```
 
-Os logs locais ficam em `data/raw/`, ignorados pelo Git. O dataset versionado tem
-9.911 registros e 42 atributos lexicais; os splits atuais têm 3.482 registros de
-treino, 3.085 de validação e 3.344 de teste, sem interseção de domínios entre os
-splits. O alinhamento corrigido gera 10.000 linhas, mas regenerar mudaria os
-splits e invalidaria os checkpoints atuais; a regeneração foi decidida em
-24/11/2026 e está nas
-[pendências do roadmap](../roadmap.md#pendências-em-ordem-de-execução).
+Os logs locais ficam em `data/raw/`, ignorados pelo Git (exceto `data/raw/archive/`,
+que guarda os logs do dataset-v1). O dataset versionado (dataset-v2) tem 20.000
+registros e 42 atributos lexicais; os splits atuais têm 11.901 registros de
+treino, 4.026 de validação e 4.073 de teste, sem interseção de domínios entre os
+splits. O relatório do alinhamento fica em `data/processed/alignment.json`
+(20.000 rótulos, 20.000 linhas escritas, sem lacunas).
 
 ## Treino e avaliação
 
