@@ -119,10 +119,10 @@ services:
     environment:
       DNS_TARGETS: "resolver:70,dnsmasq:20,bind9:10"
       DNS_PORT: "53"
-      QUERY_COUNT: "${QUERY_COUNT:-10000}"
+      QUERY_COUNT: "${QUERY_COUNT:-20000}"
       QUERY_INTERVAL: "${QUERY_INTERVAL:-0.01}"
       SEED: "${SEED:-42}"
-      ANOMALY_RATE: "${ANOMALY_RATE:-0.5}"
+      ANOMALY_RATE: "${ANOMALY_RATE:-0.15}"
       TRANCO_PATH: "${TRANCO_PATH:-/external/tranco_top.csv}"
       TRANCO_LIMIT: "${TRANCO_LIMIT:-2000}"
       TRANCO_RATE: "${TRANCO_RATE:-0.15}"
