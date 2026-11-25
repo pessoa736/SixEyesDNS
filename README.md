@@ -86,10 +86,10 @@ conhecido. Use `--json` para obter o relatório completo.
 
 O pipeline reúne laboratório Docker, logs dnsmasq/BIND9/Unbound, alinhamento de
 logs e rótulos, splits sem interseção de domínios, três autoencoders, avaliação
-e demonstração. O dataset versionado tem 9.911 registros e 6.924 domínios
-únicos. O alinhamento corrigido gera 10.000 linhas, mas regenerar mudaria os
-splits e invalidaria os checkpoints; a regeneração foi decidida e está nas
-pendências do [roadmap](roadmap.md#pendências-em-ordem-de-execução).
+e demonstração. O dataset versionado (dataset-v2, 24/11/2026) tem 20.000
+registros e 10.971 domínios únicos, com anomalias sem sufixo fixo e
+prevalência de suspeitas de 15% na geração. A versão anterior (dataset-v1, com
+9.911 registros e todas as suspeitas em `.tunnel`) fica no histórico do git.
 
 ### Representação e modelos
 
@@ -120,20 +120,25 @@ Teste por registro, limiar P99 dos normais da validação. Fonte:
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
-| Entropia | 0.9838 | 0.1873 | 0.3147 | 0.0107 | 0.6712 |
-| Isolation Forest | 0.9840 | 0.4513 | 0.6188 | 0.0254 | 0.9396 |
-| DenseAE | 0.9986 | 0.5592 | 0.7169 | 0.0027 | 0.9901 |
-| CharAE | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 |
-| HybridAE | 0.9973 | 1.0000 | 0.9987 | 0.0093 | 1.0000 |
+| Entropia | 0.9174 | 0.3384 | 0.4944 | 0.0179 | 0.7613 |
+| Isolation Forest | 0.8936 | 0.3225 | 0.4740 | 0.0226 | 0.8116 |
+| DenseAE | 0.9811 | 0.4477 | 0.6148 | 0.0051 | 0.9492 |
+| CharAE | 0.9817 | 0.9921 | 0.9868 | 0.0109 | 0.9997 |
+| HybridAE | 0.9906 | 0.9808 | 0.9857 | 0.0055 | 0.9993 |
 
-O CharAE não erra nesse teste. O HybridAE detecta as mesmas 2.595 suspeitas,
-mas sinaliza sete domínios normais `normal_hard` no P99; com o limiar de melhor
-F1, sobra um falso positivo. Portanto, os dados não sustentam chamar o híbrido
-de “o melhor modelo”.
+Com o dataset mais difícil (dataset-v2), o teto de ROC-AUC 1 sai do teste e os
+dois autoencoders de caracteres se separam: o CharAE tem recall maior
+(0,9921 contra 0,9808), mas o HybridAE tem a metade do FPR (0,0055 contra
+0,0109) — 14 domínios `normal_hard` sinalizados por engano contra 28, sempre
+hashes de CDN. O HybridAE também generaliza melhor: a razão entre o FPR do
+teste e o do treino é 0,76× (sem sinal de sobreajuste), contra 3,02× do CharAE
+(ver [overfitting.csv](results/evaluation/overfitting.csv)). Nenhum dos dois é
+estritamente melhor; a escolha depende de priorizar recall ou FPR.
 
-O teste tem 77,6% de suspeitas, muito acima do esperado em tráfego real. Com
-recall 1 e FPR 0,0093, a precisão esperada do HybridAE cai para **0,5194 com 1%
-de suspeitas** e **0,0967 com 0,1%**. F1 alto não basta para decidir uso real.
+O teste tem 37,1% de suspeitas, ainda acima do esperado em tráfego real. Com
+recall 0,9808 e FPR 0,0055, a precisão esperada do HybridAE cai para **0,6446
+com 1% de suspeitas** e **0,1524 com 0,1%**. F1 alto não basta para decidir uso
+real.
 
 As tabelas por registro/domínio, as duas políticas de limiar, ablação, LOFO,
 prevalência, explicabilidade e falsos positivos estão em
@@ -170,7 +175,7 @@ implantação, privacidade, limites e o protocolo para uma prova de conceito.
 - **Similaridade de moldes:** splits não repetem domínios, mas compartilham
   padrões do gerador. A diversidade dos normais é o gargalo principal.
 - **Falsos positivos:** hashes legítimos de CDN podem parecer payloads; o
-  exemplo `f4bfff32c5.cdn.brisa` deixa isso visível na demo.
+  exemplo `6222f8b896.cdn.nuvem` deixa isso visível na demo.
 - **Prevalência:** com ataques raros, a maioria dos alertas pode ser falsa.
 - **Uma seed e um split:** faltam intervalos de confiança e avaliação temporal.
 - **Fine-tuning contaminado:** adaptar com anomalias pode destruir a utilidade
@@ -179,8 +184,10 @@ implantação, privacidade, limites e o protocolo para uma prova de conceito.
 
 ## Conclusões
 
-1. CharAE e HybridAE superam os baselines neste conjunto, mas o CharAE é o
-   melhor resultado medido; o híbrido não o supera.
+1. CharAE e HybridAE superam os baselines neste conjunto. Nenhum dos dois é
+   estritamente melhor: o CharAE tem recall maior, o HybridAE tem metade do
+   FPR e generaliza melhor para domínios não vistos (ver
+   [Hipótese do híbrido](roadmap.md#hipótese-do-híbrido)).
 2. O limiar e a prevalência importam tanto quanto a arquitetura. F1 isolado
    distorce a leitura quando a distribuição real é desbalanceada.
 3. O projeto entrega um laboratório, um método auditável, uma interface Gradio
