@@ -34,6 +34,12 @@ serviços e CDNs usados naquela rede, em vez dos domínios sintéticos do projet
 **Condição:** tráfego de adaptação limpo, validação independente e monitoramento
 de drift quando a infraestrutura mudar.
 
+**Medido (24/11/2026):** sem essa adaptação o detector não serve fora do
+laboratório. Aplicado aos 2.000 nomes mais populares do ranking Tranco, tratados
+como normais, o CharAE sinaliza 1.999, o HybridAE 1.998 e o DenseAE 1.218
+(`python -m source.external_check`). A adaptação é, portanto, condição e não
+opção; sua eficácia em nomes reais ainda não foi medida.
+
 ### 3. Detector auxiliar em gateway ou resolvedor interno
 
 Os checkpoints são pequenos e a inferência roda em CPU. Um resolvedor ou gateway

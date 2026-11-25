@@ -30,6 +30,9 @@ do `docker-compose.yml` desde o dataset-v2, 24/11/2026). O dashboard fica em
 - **Normais difíceis:** ids de CDN em base32, identificadores hexadecimais,
   ferramentas de infraestrutura pouco frequentes, hashes de CDN e os perfis
   temáticos.
+- **Normais reais (opcional):** o perfil `normal_tranco` usa nomes de um recorte
+  local do ranking Tranco como `<domínio>.test`. O dataset-v2 foi gerado sem o
+  arquivo; veja `data/external/README.md` e `python -m source.external_check`.
 - **Prevalência:** é parâmetro de execução (`ANOMALY_RATE`); o padrão do compose
   passou de 0,5 para 0,15 no dataset-v2.
 
