@@ -31,7 +31,7 @@ from source.plot_training import (
     zoom_start,
     zoom_window,
 )
-from source.scoring import load_checkpoint, read_rows
+from source.scoring import load_checkpoint, percentile_threshold, read_rows
 from source.test_model import (
     balanced_rows,
     generate_test_plot,
@@ -261,6 +261,48 @@ def test_verify_saved_scores_confirms_order_with_checkpoint(
     assert len(scores) == len(rows)
     with pytest.raises(ValueError, match="não coincidem"):
         verify_saved_scores(scores[::-1], rows, "validation", loaded)
+
+
+def test_verify_saved_scores_tolerates_gpu_rounding(
+    results_dir: Path, minimal_splits: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reavaliacao em GPU CUDA nao e bit a bit igual ao treino.
+
+    A verificacao aceita a diferenca de ponto flutuante, mas continua
+    rejeitando uma ordem de linhas realmente diferente.
+    """
+    loaded = load_checkpoint(results_dir)
+    rows = read_rows(minimal_splits / "validation.csv")
+    saved = np.asarray(_metrics(results_dir)["validation_scores"], dtype=float)
+
+    original = loaded.score
+
+    def perturbed(items: list[dict[str, str]]) -> np.ndarray:
+        fresh = original(items)
+        # ruido pequeno, do tamanho do que a GPU CUDA produz
+        return fresh + fresh.std() * 1e-3
+
+    monkeypatch.setattr(loaded, "score", perturbed)
+    accepted = verify_saved_scores(saved, rows, "validation", loaded)
+    assert len(accepted) == len(rows)
+
+    def shuffled(items: list[dict[str, str]]) -> np.ndarray:
+        fresh = original(items)
+        return fresh[::-1]
+
+    monkeypatch.setattr(loaded, "score", shuffled)
+    with pytest.raises(ValueError, match="não coincidem"):
+        verify_saved_scores(saved, rows, "validation", loaded)
+
+
+def test_verify_validation_threshold_tolerates_gpu_rounding() -> None:
+    """O P99 recalculado pode diferir levemente do salvo em GPU."""
+    scores = np.concatenate((np.linspace(0.0, 1.0, 101), np.full(20, 50.0)))
+    labels = np.concatenate((np.zeros(101, dtype=int), np.ones(20, dtype=int)))
+    expected = percentile_threshold(scores[labels == 0])
+    verify_validation_threshold(expected + 0.001, scores, labels)
+    with pytest.raises(ValueError, match="P99"):
+        verify_validation_threshold(expected + 5.0, scores, labels)
 
 
 def test_plot_score_distributions_shares_x_axis_and_reports_points_outside_zoom(

@@ -4,104 +4,120 @@
   "holdout_family": null,
   "splits": {
     "train": {
-      "rows": 3482,
-      "domains": 2049,
-      "normal": 3482,
+      "rows": 11901,
+      "domains": 5567,
+      "normal": 11901,
       "suspeita": 0,
       "by_label": {
         "normal": {
-          "rows": 3482,
-          "domains": 2049
+          "rows": 11901,
+          "domains": 5567
         }
       },
       "by_family": {
         "normal": {
-          "rows": 3482,
-          "domains": 2049
+          "rows": 11901,
+          "domains": 5567
         }
       }
     },
     "validation": {
-      "rows": 3085,
-      "domains": 2437,
-      "normal": 703,
-      "suspeita": 2382,
+      "rows": 4026,
+      "domains": 2701,
+      "normal": 2518,
+      "suspeita": 1508,
       "by_label": {
         "normal": {
-          "rows": 703,
-          "domains": 439
+          "rows": 2518,
+          "domains": 1193
         },
         "suspeita": {
-          "rows": 2382,
-          "domains": 1998
+          "rows": 1508,
+          "domains": 1508
         }
       },
       "by_family": {
         "base32": {
-          "rows": 522,
-          "domains": 522
+          "rows": 208,
+          "domains": 208
         },
         "base64": {
-          "rows": 499,
-          "domains": 499
+          "rows": 231,
+          "domains": 231
+        },
+        "dictionary": {
+          "rows": 229,
+          "domains": 229
         },
         "hex": {
-          "rows": 495,
-          "domains": 495
+          "rows": 213,
+          "domains": 213
         },
         "low_entropy": {
-          "rows": 387,
-          "domains": 3
+          "rows": 198,
+          "domains": 198
         },
         "mixed": {
-          "rows": 479,
-          "domains": 479
+          "rows": 224,
+          "domains": 224
         },
         "normal": {
-          "rows": 703,
-          "domains": 439
+          "rows": 2518,
+          "domains": 1193
+        },
+        "short": {
+          "rows": 205,
+          "domains": 205
         }
       }
     },
     "test": {
-      "rows": 3344,
-      "domains": 2438,
-      "normal": 749,
-      "suspeita": 2595,
+      "rows": 4073,
+      "domains": 2703,
+      "normal": 2563,
+      "suspeita": 1510,
       "by_label": {
         "normal": {
-          "rows": 749,
-          "domains": 440
+          "rows": 2563,
+          "domains": 1194
         },
         "suspeita": {
-          "rows": 2595,
-          "domains": 1998
+          "rows": 1510,
+          "domains": 1509
         }
       },
       "by_family": {
         "base32": {
-          "rows": 486,
-          "domains": 486
+          "rows": 211,
+          "domains": 211
         },
         "base64": {
-          "rows": 498,
-          "domains": 498
+          "rows": 210,
+          "domains": 210
+        },
+        "dictionary": {
+          "rows": 233,
+          "domains": 233
         },
         "hex": {
-          "rows": 505,
-          "domains": 505
+          "rows": 216,
+          "domains": 216
         },
         "low_entropy": {
-          "rows": 602,
-          "domains": 5
+          "rows": 213,
+          "domains": 212
         },
         "mixed": {
-          "rows": 504,
-          "domains": 504
+          "rows": 212,
+          "domains": 212
         },
         "normal": {
-          "rows": 749,
-          "domains": 440
+          "rows": 2563,
+          "domains": 1194
+        },
+        "short": {
+          "rows": 215,
+          "domains": 215
         }
       }
     }

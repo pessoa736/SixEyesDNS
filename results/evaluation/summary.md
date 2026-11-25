@@ -1,48 +1,48 @@
 # Resultados no teste
 
-Teste: 3344 registros, 2438 domínios únicos, prevalência de suspeitas 0.7760. Limiares calibrados somente na validação.
+Teste: 4073 registros, 2703 domínios únicos, prevalência de suspeitas 0.3707. Limiares calibrados somente na validação.
 
-Com essa prevalência, marcar tudo como suspeito já rende precisão 0.7760, recall 1 e F1 0.8739; compare também FPR, ROC-AUC e PR-AUC.
+Com essa prevalência, marcar tudo como suspeito já rende precisão 0.3707, recall 1 e F1 0.5409; compare também FPR, ROC-AUC e PR-AUC.
 
 ## Teste por registro — limiar P99 dos normais da validação
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% | Linhas |
 |---|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.9838 | 0.1873 | 0.3147 | 0.0107 | 0.6712 | 0.8977 | 0.1464 | 3344 |
-| Isolation Forest | 0.9840 | 0.4513 | 0.6188 | 0.0254 | 0.9396 | 0.9784 | 0.3730 | 3344 |
-| AE denso (atributos) | 0.9986 | 0.5592 | 0.7169 | 0.0027 | 0.9901 | 0.9966 | 0.7368 | 3344 |
-| AE lexical (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 3344 |
-| AE híbrido | 0.9973 | 1.0000 | 0.9987 | 0.0093 | 1.0000 | 1.0000 | 1.0000 | 3344 |
+| Limiar de entropia | 0.9174 | 0.3384 | 0.4944 | 0.0179 | 0.7613 | 0.7479 | 0.2815 | 4073 |
+| Isolation Forest | 0.8936 | 0.3225 | 0.4740 | 0.0226 | 0.8116 | 0.7531 | 0.2079 | 4073 |
+| AE denso (atributos) | 0.9811 | 0.4477 | 0.6148 | 0.0051 | 0.9492 | 0.9244 | 0.5225 | 4073 |
+| AE lexical (caracteres) | 0.9817 | 0.9921 | 0.9868 | 0.0109 | 0.9997 | 0.9995 | 0.9914 | 4073 |
+| AE híbrido | 0.9906 | 0.9808 | 0.9857 | 0.0055 | 0.9993 | 0.9990 | 0.9868 | 4073 |
 
 ## Teste por registro — limiar melhor F1 da validação
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% | Linhas |
 |---|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.7600 | 0.8605 | 0.8072 | 0.9413 | 0.6712 | 0.8977 | 0.1464 | 3344 |
-| Isolation Forest | 0.9357 | 0.9869 | 0.9606 | 0.2350 | 0.9396 | 0.9784 | 0.3730 | 3344 |
-| AE denso (atributos) | 0.9774 | 0.9842 | 0.9808 | 0.0788 | 0.9901 | 0.9966 | 0.7368 | 3344 |
-| AE lexical (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 3344 |
-| AE híbrido | 0.9996 | 1.0000 | 0.9998 | 0.0013 | 1.0000 | 1.0000 | 1.0000 | 3344 |
+| Limiar de entropia | 0.6012 | 0.6907 | 0.6428 | 0.2700 | 0.7613 | 0.7479 | 0.2815 | 4073 |
+| Isolation Forest | 0.6774 | 0.6550 | 0.6660 | 0.1838 | 0.8116 | 0.7531 | 0.2079 | 4073 |
+| AE denso (atributos) | 0.8022 | 0.8623 | 0.8312 | 0.1252 | 0.9492 | 0.9244 | 0.5225 | 4073 |
+| AE lexical (caracteres) | 0.9993 | 0.9887 | 0.9940 | 0.0004 | 0.9997 | 0.9995 | 0.9914 | 4073 |
+| AE híbrido | 0.9906 | 0.9808 | 0.9857 | 0.0055 | 0.9993 | 0.9990 | 0.9868 | 4073 |
 
 ## Teste por domínio único — limiar P99 dos normais da validação
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% | Linhas |
 |---|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.9838 | 0.2432 | 0.3900 | 0.0182 | 0.7880 | 0.9424 | 0.1807 | 2438 |
-| Isolation Forest | 0.9932 | 0.5861 | 0.7372 | 0.0182 | 0.9582 | 0.9895 | 0.5125 | 2438 |
-| AE denso (atributos) | 0.9982 | 0.5470 | 0.7068 | 0.0045 | 0.9820 | 0.9955 | 0.6667 | 2438 |
-| AE lexical (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 2438 |
-| AE híbrido | 0.9965 | 1.0000 | 0.9983 | 0.0159 | 1.0000 | 1.0000 | 1.0000 | 2438 |
+| Limiar de entropia | 0.9174 | 0.3386 | 0.4947 | 0.0385 | 0.6922 | 0.7966 | 0.2372 | 2703 |
+| Isolation Forest | 0.9365 | 0.3227 | 0.4800 | 0.0276 | 0.8033 | 0.8464 | 0.2054 | 2703 |
+| AE denso (atributos) | 0.9811 | 0.4473 | 0.6145 | 0.0109 | 0.9333 | 0.9458 | 0.4361 | 2703 |
+| AE lexical (caracteres) | 0.9816 | 0.9920 | 0.9868 | 0.0235 | 0.9994 | 0.9995 | 0.9901 | 2703 |
+| AE híbrido | 0.9906 | 0.9808 | 0.9857 | 0.0117 | 0.9986 | 0.9990 | 0.9801 | 2703 |
 
 ## Teste por domínio único — limiar melhor F1 da validação
 
 | Sistema | Precisão | Recall | F1 | FPR | ROC-AUC | PR-AUC | Recall a FPR ≤ 1% | Linhas |
 |---|---|---|---|---|---|---|---|---|
-| Limiar de entropia | 0.8219 | 0.9980 | 0.9014 | 0.9818 | 0.7880 | 0.9424 | 0.1807 | 2438 |
-| Isolation Forest | 0.9379 | 0.9830 | 0.9599 | 0.2955 | 0.9582 | 0.9895 | 0.5125 | 2438 |
-| AE denso (atributos) | 0.9712 | 0.9795 | 0.9753 | 0.1318 | 0.9820 | 0.9955 | 0.6667 | 2438 |
-| AE lexical (caracteres) | 1.0000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 2438 |
-| AE híbrido | 0.9995 | 1.0000 | 0.9997 | 0.0023 | 1.0000 | 1.0000 | 1.0000 | 2438 |
+| Limiar de entropia | 0.6720 | 0.6912 | 0.6815 | 0.4263 | 0.6922 | 0.7966 | 0.2372 | 2703 |
+| Isolation Forest | 0.8039 | 0.6547 | 0.7217 | 0.2018 | 0.8033 | 0.8464 | 0.2054 | 2703 |
+| AE denso (atributos) | 0.8685 | 0.8622 | 0.8653 | 0.1650 | 0.9333 | 0.9458 | 0.4361 | 2703 |
+| AE lexical (caracteres) | 0.9993 | 0.9887 | 0.9940 | 0.0008 | 0.9994 | 0.9995 | 0.9901 | 2703 |
+| AE híbrido | 0.9906 | 0.9808 | 0.9857 | 0.0117 | 0.9986 | 0.9990 | 0.9801 | 2703 |
 
 ## Quase-duplicatas em relação ao treino
 
@@ -50,7 +50,7 @@ Maior similaridade de Jaccard de trigramas de caracteres com um domínio normal 
 
 | Split | Classe | Domínios | Mediana | P90 | Fração ≥ limiar | Limiar |
 |---|---|---|---|---|---|---|
-| validation | normal | 439 | 0.6364 | 0.7500 | 0.0319 | 0.8000 |
-| validation | suspeita | 1998 | 0.0556 | 0.1176 | 0.0000 | 0.8000 |
-| test | normal | 440 | 0.6364 | 0.7500 | 0.0364 | 0.8000 |
-| test | suspeita | 1998 | 0.0556 | 0.1176 | 0.0000 | 0.8000 |
+| validation | normal | 1193 | 0.6400 | 0.7638 | 0.0453 | 0.8000 |
+| validation | suspeita | 1508 | 0.4062 | 0.7066 | 0.0411 | 0.8000 |
+| test | normal | 1194 | 0.6615 | 0.7576 | 0.0310 | 0.8000 |
+| test | suspeita | 1509 | 0.4062 | 0.7083 | 0.0477 | 0.8000 |

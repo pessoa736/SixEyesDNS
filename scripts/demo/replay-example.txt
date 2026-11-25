@@ -1,0 +1,14 @@
+# Replay offline com consultas do split de teste (dataset-v2) e ruído típico
+# dos servidores. Os rótulos não são lidos pela demo; os três formatos podem
+# aparecer no mesmo arquivo.
+Nov 24 10:00:00 dnsmasq[41]: query[A] canary.mail.cobalto.test from 172.30.0.6
+24-Nov-2026 10:00:01.125 queries: client @0x7f8e631e60e0 172.30.0.6#53000 (aen6dyl46u.eu-west.cdn.cobalto.test): query: aen6dyl46u.eu-west.cdn.cobalto.test IN TXT + (172.30.0.3)
+[1795168802] unbound[1:0] info: 172.30.0.6 assets-health-telemetry-media-assets.eu-west.web.lumen.test. CNAME IN
+Nov 24 10:00:03 dnsmasq[41]: query[A] 6222f8b896.cdn.nuvem.test from 172.30.0.6
+24-Nov-2026 10:00:04.125 queries: client @0x7f8e631e60e0 172.30.0.6#53000 (ddddddddddddddddddddddd.metricsink.test): query: ddddddddddddddddddddddd.metricsink.test IN TXT + (172.30.0.3)
+[1795168805] unbound[1:0] info: 172.30.0.6 cxce3h2t2gyo2.us-west.cdn.pulsar.test. A IN
+[1795168805] unbound[1:0] info: 172.30.0.6 cxce3h2t2gyo2.us-west.cdn.pulsar.test. A IN NOERROR 0.000000 1 59
+Nov 24 10:00:06 dnsmasq[41]: query[MX] canary.mail.cobalto.test from 172.30.0.6
+24-Nov-2026 10:00:07.125 queries: client @0x7f8e631e60e0 172.30.0.6#53000 (w2nylcqj2u-79.sa-east.dashboard.pulsar.test): query: w2nylcqj2u-79.sa-east.dashboard.pulsar.test IN TXT + (172.30.0.3)
+[1795168808] unbound[1:0] info: 172.30.0.6 v6.web.pulsar.test. AAAA IN
+Nov 24 10:00:09 dnsmasq[41]: reply canary.mail.cobalto.test is 172.30.0.11

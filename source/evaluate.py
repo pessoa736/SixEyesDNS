@@ -133,6 +133,22 @@ class System:
     def label(self) -> str:
         return SYSTEM_LABELS.get(self.key, self.key)
 
+    def train_scores(self, train: Split) -> np.ndarray:
+        """Scores do split de treino, calculados sob demanda.
+
+        Serve para medir sobreajuste (FPR no treino contra FPR no teste).
+        O score usa os mesmos parametros de calibracao salvos no checkpoint.
+        """
+        if self.key == "entropy":
+            return entropy_scores(train.rows)
+        if self.key == "isolation_forest":
+            forest = IsolationForestBaseline(SEED).fit(normal_rows(train.rows))
+            return forest.score(train.rows)
+        if self.loaded is None:
+            raise ValueError(f"O sistema {self.key!r} não tem modelo carregado")
+        text_error, numeric_error = self.loaded.components(train.rows)
+        return self.loaded.combine(text_error, numeric_error)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -457,6 +473,52 @@ def false_positive_rows(
                     "threshold": thresholds[policy],
                     "false_positive_domains_total": len(counts),
                     "false_positive_rows_total": sum(e["rows"] for e in counts.values()),
+                }
+            )
+    return rows
+
+
+def overfitting_rows(
+    systems: list[System],
+    splits: dict[str, Split],
+    thresholds: dict[str, dict[str, float]],
+) -> list[dict[str, object]]:
+    """FPR dos normais no treino, na validação e no teste.
+
+    Um autoencoder que decora os nomes normais tem FPR muito menor no treino
+    do que no teste. A razao entre as duas mede o sobreajuste ao molde.
+
+    O score do treino e calculado aqui, sob demanda: a avaliacao principal
+    so produz scores de validacao e teste, e o treino nao entra em nenhuma
+    metrica de desempenho.
+    """
+    rows: list[dict[str, object]] = []
+    for system in systems:
+        train_scores = system.train_scores(splits["train"])
+        for policy in POLICIES:
+            threshold = thresholds[system.key][policy]
+            rates: dict[str, float] = {}
+            for split_name, scores in (
+                ("train", train_scores),
+                ("validation", system.scores["validation"]),
+                ("test", system.scores["test"]),
+            ):
+                normals = splits[split_name].labels == 0
+                rates[split_name] = float(
+                    (scores[normals] > threshold).mean() if normals.any() else 0.0
+                )
+            train_rate = rates["train"]
+            ratio = rates["test"] / train_rate if train_rate > 0 else None
+            rows.append(
+                {
+                    "system": system.key,
+                    "policy": policy,
+                    "train_fpr": train_rate,
+                    "validation_fpr": rates["validation"],
+                    "test_fpr": rates["test"],
+                    "test_over_train_ratio": ratio,
+                    "train_normal_rows": int((splits["train"].labels == 0).sum()),
+                    "test_normal_rows": int((splits["test"].labels == 0).sum()),
                 }
             )
     return rows
@@ -986,6 +1048,7 @@ def run(
     lofo = lofo_rows(systems, splits["validation"], splits["test"], thresholds)
     ablation = ablation_rows(systems, splits, lambdas)
     leakage = near_duplicate_rows(splits)
+    overfitting = overfitting_rows(systems, splits, thresholds)
 
     attribute_tables = {}
     character_tables = {}
@@ -1013,6 +1076,7 @@ def run(
     write_csv(output_dir / "lofo.csv", lofo)
     write_csv(output_dir / "ablation.csv", ablation)
     write_csv(output_dir / "leakage.csv", leakage)
+    write_csv(output_dir / "overfitting.csv", overfitting)
     write_csv(
         output_dir / "explain_attributes.csv",
         [{"system": s, **row} for s, table in attribute_tables.items() for row in table],

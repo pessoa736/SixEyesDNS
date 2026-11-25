@@ -7,7 +7,10 @@
 services:
 
   dnsmasq:
-    build: ./docker/dnsmasq
+    build:
+      context: ./docker/dnsmasq
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     volumes:
       - ./data/raw/dnsmasq:/var/log/dnsmasq
     ports:
@@ -20,7 +23,10 @@ services:
       lab-edge: null
 
   bind9:
-    build: ./docker/bind9
+    build:
+      context: ./docker/bind9
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     volumes:
       - ./data/raw/bind9:/var/log/named
     restart: always
@@ -29,7 +35,10 @@ services:
         ipv4_address: 172.30.0.3
 
   resolver:
-    build: ./docker/resolver
+    build:
+      context: ./docker/resolver
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     depends_on:
       - dnsmasq
       - bind9
@@ -41,7 +50,10 @@ services:
         ipv4_address: 172.30.0.4
 
   dhcp:
-    build: ./docker/dhcp
+    build:
+      context: ./docker/dhcp
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     volumes:
       - ./data/raw/dhcp:/var/log/kea
     restart: always
@@ -50,7 +62,10 @@ services:
         ipv4_address: 172.30.0.5
 
   fake-services:
-    build: ./docker/service-api
+    build:
+      context: ./docker/service-api
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     environment:
       TRAFFIC_PATH: /data/dashboard/backend_traffic.json
     volumes:
@@ -60,7 +75,10 @@ services:
         ipv4_address: 172.30.0.11
 
   backend-client:
-    build: ./docker/backend-client
+    build:
+      context: ./docker/backend-client
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     depends_on:
       - fake-services
     environment:
@@ -87,7 +105,10 @@ services:
         ipv4_address: 172.30.0.10
 
   generator:
-    build: ./docker/generator
+    build:
+      context: ./docker/generator
+      # Nome em minúscula: o Linux diferencia maiúsculas de minúsculas.
+      dockerfile: dockerfile
     depends_on:
       - dnsmasq
       - bind9
@@ -98,10 +119,10 @@ services:
     environment:
       DNS_TARGETS: "resolver:70,dnsmasq:20,bind9:10"
       DNS_PORT: "53"
-      QUERY_COUNT: "${QUERY_COUNT:-10000}"
+      QUERY_COUNT: "${QUERY_COUNT:-20000}"
       QUERY_INTERVAL: "${QUERY_INTERVAL:-0.01}"
       SEED: "${SEED:-42}"
-      ANOMALY_RATE: "${ANOMALY_RATE:-0.5}"
+      ANOMALY_RATE: "${ANOMALY_RATE:-0.15}"
       TRANCO_PATH: "${TRANCO_PATH:-/external/tranco_top.csv}"
       TRANCO_LIMIT: "${TRANCO_LIMIT:-2000}"
       TRANCO_RATE: "${TRANCO_RATE:-0.15}"

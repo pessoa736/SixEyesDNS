@@ -116,6 +116,23 @@ def reconstruction_errors(
     return np.concatenate(character_parts), np.concatenate(feature_parts)
 
 
+def aggregate_reconstruction_errors(
+    characters: torch.Tensor,
+    character_errors: np.ndarray,
+    feature_errors: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Agrega erros por posição sem repetir a fórmula em treino, avaliação e demo."""
+    valid_tokens = np.maximum(
+        (characters != TOKEN_TO_INDEX[PAD]).sum(dim=1).cpu().numpy(), 1
+    )
+    text_error = character_errors.sum(axis=1) / valid_tokens
+    if feature_errors.shape[1] == 0:
+        numeric_error = np.zeros(characters.shape[0], dtype=np.float32)
+    else:
+        numeric_error = feature_errors.mean(axis=1)
+    return text_error, numeric_error
+
+
 def score_batch(
     model: nn.Module,
     characters: torch.Tensor,
@@ -126,15 +143,7 @@ def score_batch(
     character_errors, feature_errors = reconstruction_errors(
         model, characters, numeric, mode
     )
-    valid_tokens = np.maximum(
-        (characters != TOKEN_TO_INDEX[PAD]).sum(dim=1).cpu().numpy(), 1
-    )
-    text_error = character_errors.sum(axis=1) / valid_tokens
-    if feature_errors.shape[1] == 0:
-        numeric_error = np.zeros(characters.shape[0], dtype=np.float32)
-    else:
-        numeric_error = feature_errors.mean(axis=1)
-    return text_error, numeric_error
+    return aggregate_reconstruction_errors(characters, character_errors, feature_errors)
 
 
 def combine_scores(

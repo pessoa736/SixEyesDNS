@@ -1,0 +1,65 @@
+{
+  "client_ip": "172.30.0.6",
+  "tolerance_seconds": 5.0,
+  "max_missing_ratio": 0.0,
+  "strict_sequence": false,
+  "labels_total": 20000,
+  "rows_written": 20000,
+  "labels_without_log": 0,
+  "sequence_gaps": 0,
+  "matched_by_server": {
+    "bind9": 1973,
+    "dnsmasq": 3990,
+    "resolver": 14037
+  },
+  "runs": [
+    {
+      "labels": "data/raw/query_labels.csv",
+      "labels_total": 20000,
+      "rows_written": 20000,
+      "labels_without_log": 0,
+      "first_sequence": 0,
+      "last_sequence": 19999,
+      "sequence_gaps": 0,
+      "matched_by_server": {
+        "bind9": 1973,
+        "dnsmasq": 3990,
+        "resolver": 14037
+      },
+      "first_label": "2026-11-24T21:52:01.444892+00:00",
+      "last_label": "2026-11-24T21:55:57.361427+00:00",
+      "window_start": "2026-11-24T21:51:56.444892+00:00",
+      "window_end": "2026-11-24T21:55:58.361427+00:00"
+    }
+  ],
+  "logs": [
+    "data/raw/dnsmasq/dnsmasq.log",
+    "data/raw/bind9/queries.log",
+    "data/raw/resolver/unbound.log"
+  ],
+  "log_lines": {
+    "parsed": {
+      "bind9": 11546,
+      "dnsmasq": 12954,
+      "unbound": 14037
+    },
+    "other_clients": {
+      "bind9": 9573,
+      "dnsmasq": 8964,
+      "unbound": 0
+    },
+    "other_clients_by_ip": {
+      "172.30.0.4": 18537
+    },
+    "outside_window": {
+      "bind9": 0,
+      "dnsmasq": 0,
+      "unbound": 0
+    },
+    "extra_in_window": {
+      "bind9": 0,
+      "dnsmasq": 0,
+      "unbound": 0
+    }
+  }
+}

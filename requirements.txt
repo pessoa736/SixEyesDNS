@@ -4,5 +4,10 @@
 #   pip install torch --index-url https://download.pytorch.org/whl/rocm7.2
 # Se o NPAD recomendar outra versão de CUDA, instale a variante dele no lugar.
 # dnspython é usado apenas dentro do container do gerador.
+# scikit-learn e matplotlib são importados por source/scoring.py e
+# source/gradio_demo.py; sem eles o app (e o Space) não abre. O pytest fica em
+# requirements-dev.txt. O numpy chega como dependência do torch e do gradio.
 torch==2.15.0
-pytest==9.2.0
+gradio==6.32.0
+scikit-learn~=1.9
+matplotlib~=3.11

@@ -100,3 +100,25 @@ def test_parameter_counts() -> None:
     assert dense == (42 * 32 + 32) + (32 * 16 + 16) + (16 * 16 + 16) + (16 * 16 + 16) + (
         16 * 32 + 32
     ) + (32 * 42 + 42)
+
+
+@pytest.mark.parametrize("max_length", [16, 32, 64])
+def test_char_models_follow_max_length(max_length: int) -> None:
+    """O decoder e o gargalo acompanham max_length em vez de assumir 64."""
+    generator = torch.Generator().manual_seed(0)
+    characters = torch.randint(
+        0, len(VOCABULARY), (BATCH, max_length), generator=generator
+    )
+    numeric = torch.randn(BATCH, len(FEATURE_COLUMNS), generator=generator)
+
+    lexical = CharAutoencoder(len(VOCABULARY), max_length, LATENT).eval()
+    logits, _ = lexical(characters)
+    assert logits.shape == (BATCH, len(VOCABULARY), max_length)
+
+    hybrid = HybridAutoencoder(
+        len(FEATURE_COLUMNS), len(VOCABULARY), max_length, LATENT
+    ).eval()
+    for mode in ("lexical", "semantic", "hybrid"):
+        logits, reconstructed = hybrid(characters, numeric, mode=mode)
+        assert logits.shape == (BATCH, len(VOCABULARY), max_length)
+        assert reconstructed.shape == (BATCH, len(FEATURE_COLUMNS))

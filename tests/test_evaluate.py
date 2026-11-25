@@ -9,8 +9,11 @@ import pytest
 
 from source.evaluate import (
     Split,
+    build_systems,
+    calibrate,
     check_splits,
     load_splits,
+    overfitting_rows,
     parse_model_dirs,
     run,
 )
@@ -38,7 +41,8 @@ def test_outputs_are_written(evaluation: tuple[dict[str, object], Path]) -> None
     expected = {
         "metrics.json", "metrics.csv", "summary.md", "ablation.md", "ablation.csv",
         "recall_by_family.csv", "fpr_by_profile.csv", "false_positives.csv",
-        "prevalence.csv", "lofo.csv", "leakage.csv", "explain_attributes.csv",
+        "prevalence.csv", "lofo.csv", "leakage.csv", "overfitting.csv",
+        "explain_attributes.csv",
         "explain_characters.csv", "explain_examples.md", "roc-pr.png", "prevalence.png",
         "recall-by-family.png", "fpr-by-profile.png", "lofo.png", "confusion-matrices.png",
         "explain-attributes.png", "explain-characters.png",
@@ -166,6 +170,42 @@ def test_stale_checkpoint_is_detected(
         (other_splits / f"{name}.csv").write_text(lines, encoding="utf-8")
     with pytest.raises(ValueError, match="splits mudaram|divergem|limiar"):
         run(other_splits, trained_models, tmp_path / "out", plots=False)
+
+
+def test_overfitting_rows_compare_train_and_test_fpr(
+    evaluation: tuple[dict[str, object], Path], minimal_splits: Path
+) -> None:
+    """A FPR do treino e do teste sao medidas com o mesmo limiar calibrado."""
+    result, output = evaluation
+    splits = load_splits(minimal_splits)
+    systems, _ = build_systems({}, splits, 42, False)
+    thresholds = {
+        system.key: calibrate(system.scores, splits["validation"]) for system in systems
+    }
+    rows: list[dict[str, object]] = overfitting_rows(systems, splits, thresholds)
+    assert rows
+    for row in rows:
+        train_fpr = float(str(row["train_fpr"]))
+        test_fpr = float(str(row["test_fpr"]))
+        assert 0.0 <= train_fpr <= 1.0
+        assert 0.0 <= test_fpr <= 1.0
+        assert row["train_normal_rows"] == int((splits["train"].labels == 0).sum())
+        assert row["test_normal_rows"] == int((splits["test"].labels == 0).sum())
+        if train_fpr > 0:
+            assert float(str(row["test_over_train_ratio"])) == pytest.approx(
+                test_fpr / train_fpr
+            )
+        else:
+            assert row["test_over_train_ratio"] is None
+
+    written = read_csv(output / "overfitting.csv")
+    # a fixture da avaliacao inclui os tres autoencoders; as linhas calculadas
+    # aqui usam apenas os baselines (build_systems sem diretorios de modelo)
+    assert {row["system"] for row in written} >= {row["system"] for row in rows}
+    for row in written:
+        assert row["policy"] in {"p99", "best_f1"}
+        assert float(row["train_fpr"]) >= 0.0
+        assert float(row["test_fpr"]) >= 0.0
 
 
 def test_model_argument_parsing() -> None:

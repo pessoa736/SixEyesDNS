@@ -13,22 +13,24 @@ presuma que existam `src/`, `configs/` ou `source.generate_data`.
 
 ## Estado confirmado dos dados
 
-- `data/processed/dataset.csv` tem 50.000 linhas e 58 colunas.
+- `data/processed/dataset.csv` (dataset-v2, 24/11/2026) tem 20.000 linhas e
+  59 colunas.
 - O schema atual tem `query`, 6 escalares, 36 frequências de caracteres,
   7 indicadores de tipo DNS, 4 indicadores de família e os metadados
-  `query_type`, `family`, `label` e `seed`.
+  `query_type`, `family`, `profile`, `label` e `seed`.
 - A parte lexical contém 42 atributos: tamanho, entropia, razão de dígitos,
   quantidade de rótulos, maior rótulo, razão alfanumérica e 36 frequências.
 - `query` já é normalizada e não contém `.test`.
-- O gerador atual produz somente 126 domínios normais únicos, embora use
-  `QUERY_COUNT=50000`, `ANOMALY_RATE=0.5` e `SEED=42`.
-- Os splits atuais não compartilham domínios entre si, mas repetem muitos
-  registros dentro de cada split. O summary atual não detalha domínios por
-  classe e família.
-- O log versionado contém 60.000 consultas para 50.000 rótulos e inclui
-  execuções concatenadas. O casamento atual usa `(query, query_type)` e filas,
-  não timestamp. Não trate esse log como uma execução limpa sem verificar o
-  alinhamento.
+- O gerador (`docker/generator/traffic_profiles.py`) produz anomalias **sem
+  sufixo fixo**: a zona do túnel imita a infraestrutura normal (70%) ou usa
+  uma zona própria (30%). O dataset-v2 usa `QUERY_COUNT=20000`,
+  `ANOMALY_RATE=0.15` e `SEED=42` (padrões do `docker-compose.yml`).
+- Os splits atuais não compartilham domínios entre si. O summary detalha
+  domínios por split, classe e família (`data/processed/splits/summary.json`).
+- O alinhamento (`source/process_raw.py`) casa por servidor-alvo, IP do
+  gerador, janela de tempo e `(query, tipo)`; o relatório fica em
+  `data/processed/alignment.json`. O dataset-v1 (9.911 linhas, anomalias
+  sempre em `.tunnel`) fica no histórico do git.
 
 ## Regras de dados e modelos
 
@@ -43,7 +45,9 @@ presuma que existam `src/`, `configs/` ou `source.generate_data`.
   codificadas geradas pelo laboratório.
 - Preserve splits sem interseção de domínios e falhe explicitamente em caso de
   sobreposição ou casamento ambíguo de rótulos.
-- Fixe seed 42 e mantenha execução em CPU como caminho suportado.
+- Fixe seed 42. O treino roda na GPU por padrão (`--device auto`) e cai para a
+  CPU automaticamente quando não há GPU disponível; a CPU também é um caminho
+  suportado quando forçada com `--device cpu`.
 - Compare autoencoder com limiar de entropia e Isolation Forest. Calibre
   limiares somente na validação e reporte precisão, recall, F1, ROC-AUC,
   matriz de confusão, FPR e limitações.
@@ -60,9 +64,11 @@ presuma que existam `src/`, `configs/` ou `source.generate_data`.
 - Antes de criar helper, procure reutilização em `source/` e scripts existentes.
 - Valide com os menores testes relevantes; não alegue que Docker ou a porta
   `127.0.0.1:6767` funcionam sem testar.
-- Trabalhe na branch `ajustes-u3`, sem push ou force-push. Preserve alterações
-  não relacionadas e faça commits por fase, com prefixos `feat:`, `fix:`,
-  `docs:` ou `refactor:`, quando o usuário solicitar implementação.
+- Trabalhe na branch atual do repositório (verifique com `git branch`; não
+  presuma `ajustes-u3`, já mergeada), sem push ou force-push. Preserve
+  alterações não relacionadas e faça commits por fase, com prefixos `feat:`,
+  `fix:`, `docs:`, `data:` ou `refactor:`, quando o usuário solicitar
+  implementação.
 
 ## Segurança e documentação
 
