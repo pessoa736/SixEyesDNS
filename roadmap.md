@@ -27,9 +27,9 @@ na branch `docs/atualizar-readme-roadmap`, não mergeada, e a entrega é lida na
 | Fase | Estado | O que falta |
 |---|---|---|
 | 1 — Estrutura e schema | concluída | — |
-| 2 — Dados | concluída (dataset-v2 regenerado, 24/11/2026) | separar metadados (baixa prioridade) |
+| 2 — Dados | dataset-v2 pronto; Tranco baixado, ainda não misturado | bloco 3 (dataset-v3) |
 | 3 — Modelos, treino e avaliação | concluída (retreinados e reavaliados no dataset-v2) | — |
-| 4 — Demonstração | Gradio, replay e fine-tuning prontos; pacote do Space verificado localmente | blocos 1, 4 e 6 |
+| 4 — Demonstração | Gradio, replay e fine-tuning prontos; pacote do Space verificado localmente | blocos 1, 2, 4 e 6 |
 | 5 — Relatório e apresentação | texto e roteiro prontos | blocos 2 e 5 |
 | 6 — Robustez | regeneração e retreino feitos; falta variância (seeds/splits) e CI | bloco 4 |
 
@@ -45,7 +45,9 @@ na branch `docs/atualizar-readme-roadmap`, não mergeada, e a entrega é lida na
   demonstração na sala.
 - **Dataset:** regenerado em 24/11/2026 (dataset-v2: 20.000 registros, 10.971
   domínios únicos, `ANOMALY_RATE=0,15`, anomalias sem sufixo fixo). Os três
-  modelos foram retreinados e reavaliados nele.
+  modelos foram retreinados e reavaliados nele. O ranking Tranco (lista
+  `JZW4Y`) foi baixado para um dataset-v3 (bloco 3), porque o detector atual
+  sinaliza quase todos os nomes reais populares.
 - **Modelo híbrido:** o autor quer defender o híbrido pela hipótese de que mais
   informação para reconstruir o torna mais capaz de identificar domínios
   suspeitos. A hipótese e o que os dados atuais dizem sobre ela estão em
@@ -100,7 +102,8 @@ O roteiro e a lista de figuras já existem em
         de aviso + checkbox da aba de fine-tuning e pedir logs sintéticos ou
         anonimizados;
       - **limiar:** o replay não recalibra; o P99 vem da validação sintética e
-        em log real muito domínio normal desconhecido deve estourá-lo. Mostrar
+        em log real os nomes normais desconhecidos o estouram (medido com o
+        Tranco: 99,9% sinalizados). Mostrar
         o score ordenado, não só o veredito, e apresentar o fluxo "adaptar com
         log normal, depois analisar" (hoje o fine-tuning gera um `model.pt`
         para baixar e não troca o modelo ativo; usá-lo na mesma sessão exige
@@ -113,35 +116,60 @@ O roteiro e a lista de figuras já existem em
         "Testar modelo" e dar a maior parte da demo à aba de log, com captura
         de tela de plano B).
 
-### 3. Schema do dataset e fontes de domínios (baixa prioridade)
+### 3. Dataset-v3: nomes reais (Tranco)
 
-A regeneração, o retreino e a reavaliação (24/11/2026) estão concluídos; ver o
-histórico das Fases 2 e 3. Resta só a limpeza de schema abaixo, que exige uma
-nova regeneração (dataset-v3) e por isso não é prioridade para 15/12.
+Motivo, medido em 24/11/2026 com `python -m source.external_check`: o detector
+treinado no dataset-v2 sinaliza 1.999 (CharAE), 1.998 (HybridAE) e 1.218
+(DenseAE) dos 2.000 nomes mais populares do Tranco, tratados como normais,
+contra 1% a 2% dos normais do teste. Com o TLD real trocado por uma zona do
+laboratório ainda são 95,8%, 88,1% e 25,9%, e os ranks 2.001 a 4.000 repetem o
+padrão. O dataset-v2 não tem nenhuma linha `normal_tranco`.
 
+A lista padrão (ID `JZW4Y`) já está em `data/external/tranco_top.csv`, fora do
+Git; fonte, filtros e licenças em `data/external/README.md`. Falta decidir e
+executar a mistura. Ordem sugerida: os dois primeiros itens são baratos e
+orientam o terceiro.
+
+- [ ] Medir se o **fine-tuning** resolve nomes reais, sem regenerar nada:
+      adaptar o modelo com um log normal feito de nomes do Tranco (por exemplo,
+      ranks 1 a 600) e medir a fração sinalizada em ranks que ele não viu
+      (`external_check --skip 2000`) e o recall nas suspeitas do teste do
+      dataset-v2. Responde se a aba de fine-tuning da demo basta para um
+      ambiente real e se a adaptação preserva a detecção.
+- [ ] Obter a lista **filtrada**: o filtro do Google Safe Browsing exige conta
+      gratuita no Tranco (<https://tranco-list.eu/configure>); sem conta só há a
+      lista padrão, que é a recomendada pelo próprio Tranco. Gerar a lista com
+      o filtro (e sem TLDs adultos, se quiser), anotar o ID e baixar
+      `download/<ID>/10000`. Para os 2.000 primeiros nomes o ganho deve ser
+      pequeno; decidir se vale.
+- [ ] Gerar o **dataset-v3** com o Tranco misturado (perfil `normal_tranco`,
+      `TRANCO_LIMIT=2000`, `TRANCO_RATE=0,15`), retreinar os três modelos e
+      reavaliar. Cuidados:
+      - **atalho de TLD:** acrescentar só normais com TLD real faria o TLD
+        separar as classes, como o `.tunnel`; o gerador precisa emitir também
+        anomalias sob zonas com TLD real (nomes de aparência normal sob `.com`,
+        `.net`, `.io`...), com um teste que garanta que nenhum TLD separa as
+        classes;
+      - **avaliação em nomes não vistos:** comparar antes e depois com
+        `external_check --skip 2000`, que usa ranks que o gerador não emite;
+      - **co-acesso:** o Tranco lista domínios isolados; sessões realistas (uma
+        página disparando CDN e trackers) exigem um modelo próprio no gerador,
+        opcional;
+      - **nomes no dataset versionado:** o `dataset.csv` passaria a carregar
+        cerca de 2.000 nomes reais como texto, incluindo sites adultos (por
+        exemplo, TLD `.xxx`); decidir se filtra e se aceita versioná-los, citando
+        a lista (ID e licenças dos provedores);
+      - **GPU:** o último treino longo chegou a 85 °C; monitorar a temperatura;
+      - **documentação:** trocar os números do README, do roteiro e do
+        `summary.md` depois de reconferir contra `metrics.csv`.
 - [ ] Separar features de metadados no `dataset.csv`: ele tem 59 colunas e
       grava `is_<tipo DNS>`, `is_family_*`, `query_type`, `family`, `profile`,
       `label` e `seed` ao lado dos 42 atributos. O modelo já as ignora
       (`FEATURE_COLUMNS` e o `assert` de `source/features.py`), mas gravar só
       `query`, os 42 atributos e `label`, com os metadados de auditoria em
       arquivo separado, elimina o risco de vazamento por construção.
-- [ ] Usar domínios populares reais (Tranco) como normais no próximo dataset.
-      O suporte já existe no gerador (`docker/generator/external_domains.py`,
-      perfil `normal_tranco`, `TRANCO_LIMIT`/`TRANCO_RATE`), mas
-      `data/external/tranco_top.csv` não existe e o dataset-v2 **não tem**
-      nenhuma linha `normal_tranco`. Cuidados: (1) o Tranco mede
-      **popularidade, não segurança**: o ranking padrão agrega Umbrella,
-      Majestic, Farsight, CrUX e Cloudflare Radar, e o site oferece filtros
-      opcionais como o do Google Safe Browsing, o que indica que a lista crua
-      pode conter domínios indesejados; baixar uma lista com esse filtro e
-      citar o identificador dela; (2) a lista padrão traz domínios registrados
-      (existe uma variante "com subdomínios"), então os nomes são curtos e
-      limpos e não representam hashes de CDN nem subdomínios longos, que são
-      os falsos positivos reais; (3) o Tranco não diz quais domínios são
-      acessados **em conjunto**: para sessões realistas, é preciso um modelo
-      próprio de co-acesso no gerador (ex.: uma página popular dispara
-      consultas a seus CDNs e trackers); (4) o gerador limita o nome a 48
-      caracteres e só os usa como texto `.test`.
+      Fazer junto com o dataset-v3: muda o schema e os testes de `process_raw`
+      e `split_dataset`.
 
 ### 4. Robustez e hipótese do híbrido
 
@@ -182,12 +210,16 @@ pedem múltiplas seeds ou splits sobre ele, não um dataset novo.
 - [ ] Reautenticar o `gh` (`gh auth login` e depois `gh auth setup-git`): em
       24/11/2026 ele devolveu HTTP 401, o que impede consultar a PR #2 e
       bloqueia o push e o merge na `master`.
-- [x] Atualizar `.github/copilot-instructions.md`, que descrevia um estado de
-      08/11/2026 (50.000 linhas, 60.000 consultas no log, 126 domínios
-      normais, branch `ajustes-u3`). Passou a descrever o dataset-v2 (20.000
-      linhas, 59 colunas, gerador sem sufixo fixo).
-- [ ] Mergear a PR #2 (`docs/atualizar-readme-roadmap`) na `master` antes de
-      15/12 e fazer a revisão final do README e do roteiro.
+- [ ] **Levar o README novo à `master`:** o professor lê o README da `master`,
+      que ainda é o texto antigo (9.911 registros, "decisão pendente", ~39 KB),
+      enquanto o novo só existe na branch `docs/atualizar-readme-roadmap` (PR
+      #2) e em commits locais sem push. Fazer o push da branch e mergear a PR #2
+      antes de 15/12, pela interface web se o `gh` continuar sem autenticar, e
+      então a revisão final do README e do roteiro.
+- [ ] Conferir a planilha da turma: a linha de 24/11/2026 traz o título
+      aprovado (o mesmo que abre o README), a categoria, o link e o status
+      "Aprovado", mas há uma célula vazia entre "Outro" e o link. Se for a data
+      da apresentação, escolher 08, 10 ou 15/12 (não vi os cabeçalhos).
 - [ ] Sugerir, sem executar, os comandos `gh repo edit` e criação da tag
       `entrega-u3` no dia da entrega.
 
@@ -259,8 +291,11 @@ resto é inferência, marcada como tal).
   testada, detecção de DGA.
 - **Não usar:** bloqueio automático sem revisão, única camada de defesa, ou
   rede grande e heterogênea sem recalibração.
-- **Ressalva:** em rede real, hashes de CDN, trackers e DKIM são mais variados
-  que os do gerador; espera-se FPR pior (inferência; não testado em log real).
+- **Medido depois:** tratados como normais, 1.999 (CharAE), 1.998 (HybridAE) e
+  1.218 (DenseAE) dos 2.000 nomes mais populares do Tranco são sinalizados
+  (`python -m source.external_check`). Sem adaptação a normais do ambiente, o
+  detector base não serve em nomes reais, o que torna o fine-tuning condição de
+  uso. Ainda não medi se ele resolve (bloco 3).
 
 ## Critérios de aceitação
 
@@ -408,6 +443,10 @@ do schema (bloco 3, baixa prioridade, exige dataset-v3).
       conseguia escrever nele); o BIND9 também precisou de `named -u named`.
 - [x] Versionar `data/processed/alignment.json` junto com o dataset
       regenerado (sem lacunas: `labels_without_log: 0`, `sequence_gaps: 0`).
+- [x] Baixar o ranking Tranco (lista padrão, ID `JZW4Y`, 24/11/2026, ranks 1 a
+      10.000, 9.998 nomes válidos) para `data/external/tranco_top.csv`, fora do
+      Git, e registrar ID, janela, provedores e filtros em
+      `data/external/README.md`. A lista filtrada exige conta (bloco 3).
 
 ### Fase 3 — Modelos, treino e avaliação
 
@@ -471,6 +510,13 @@ baselines, avaliação completa e retreino no dataset-v2 implementados.
       3.000 sem parar. Reconferidas célula a célula as tabelas do README contra
       `results/evaluation/metrics.csv`. Os checkpoints do dataset-v1 ficam no
       histórico do git; backups locais em `*.pt.bak` (fora do Git).
+- [x] Medir o detector em nomes reais (`source/external_check.py`,
+      `tests/test_external_check.py`, `results/evaluation/external_check.csv`,
+      24/11/2026): com o top-2000 do Tranco tratado como normal, o CharAE
+      sinaliza 1.999, o HybridAE 1.998 e o DenseAE 1.218, contra 28, 14 e 13 dos
+      1.194 domínios normais do teste (o controle reproduz o `metrics.csv` por
+      domínio). Com o TLD trocado por uma zona do laboratório: 95,8%, 88,1% e
+      25,9%. Os ranks 2.001 a 4.000 (`--skip 2000`) dão o mesmo padrão.
 
 ### Fase 4 — Demonstração
 
@@ -550,6 +596,13 @@ a entrega na `master` (blocos 2 e 5).
 - [x] Atualizar `.github/copilot-instructions.md`, que descrevia um estado de
       08/11/2026 (50.000 linhas, 60.000 consultas no log, 126 domínios
       normais, branch `ajustes-u3`). Passou a descrever o dataset-v2.
+- [x] Enxugar o README (de 251 linhas e 11 KB para 162 linhas e 8 KB; o da
+      `master` tem cerca de 39 KB): corpo reorganizado nas seções pedidas pelo
+      PDF da disciplina, com o título registrado na planilha, a seção do Tranco
+      e o teste com nomes reais. A publicação do Space e o replay foram para
+      `doc/demonstracao.md`. As referências "Treino em GPU" (`requirements.txt`)
+      e "Escolha do dispositivo" (`device.py`) apontavam para seções que o README
+      não tinha; ambas passaram a apontar para "Treino em GPU".
 
 ### Fase 6 — Robustez (nova)
 

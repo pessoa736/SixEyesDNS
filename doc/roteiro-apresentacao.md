@@ -108,6 +108,12 @@ Pontos a falar:
 
 Análise crítica, sem esconder:
 
+- **Nomes reais (medido, `python -m source.external_check`):** tratando os 2.000
+  nomes mais populares do ranking Tranco como tráfego normal, o CharAE sinaliza
+  1.999, o HybridAE 1.998 e o DenseAE 1.218, contra 1% a 2% dos normais do
+  laboratório. O detector aprendeu o vocabulário do laboratório; num ambiente
+  real ele precisa ser adaptado a normais daquele ambiente, e isso ainda não foi
+  medido em nomes reais.
 - ROC-AUC alto num dataset sintético **não** prova eficácia em tráfego real,
   mesmo sem o teto de 1,0 do dataset anterior. Os splits não repetem
   domínios, mas os normais compartilham moldes com o gerador.
@@ -122,8 +128,9 @@ Análise crítica, sem esconder:
 - O modelo não vê a resposta DNS nem prova exfiltração.
 
 Fechamento: a aplicação responsável hoje é **priorização para análise
-humana**. O próximo passo é comparar CharAE e híbrido com várias seeds e
-splits, para saber se a diferença de recall e FPR é estável.
+humana**. Os próximos passos são misturar o Tranco ao dataset (com anomalias
+também em TLDs reais) e comparar CharAE e híbrido com várias seeds e splits,
+para saber se a diferença de recall e FPR é estável.
 
 ## 5. Demonstração no Space (1,5 min)
 
@@ -171,7 +178,13 @@ Se o Space estiver lento, não esperar: pular o fine-tuning e mostrar a captura.
   (0,0055 contra 0,0109) e generaliza melhor do treino para o teste. A escolha
   depende de priorizar recall ou FPR. Uma seed e um split; o roadmap prevê
   múltiplas seeds para fechar essa comparação.
-- **"Funciona em tráfego real?"** Não foi testado. Só há laboratório sintético.
+- **"Funciona em tráfego real?"** Não, e eu medi isso: aplicado aos 2.000 nomes
+  mais populares do Tranco, o CharAE sinaliza 1.999 e o HybridAE 1.998 como
+  suspeitos. Em um ambiente real o modelo precisa ser adaptado a normais dele
+  (a aba de fine-tuning), e a eficácia disso em nomes reais ainda não foi medida.
+- **"Por que o dataset não tem nomes reais?"** O gerador aceita o ranking Tranco
+  (perfil `normal_tranco`), mas o dataset-v2 foi gerado sem ele; misturá-lo é o
+  próximo passo, com anomalias também em TLDs reais para o TLD não virar atalho.
 - **"O modelo não está aprendendo algum atalho do gerador?"** Era o caso do
   dataset anterior: 100% das suspeitas terminavam em `.tunnel`, e um controle
   (`results/archive/dataset-v1/suffix_control.csv`) mostrou que acrescentar o
