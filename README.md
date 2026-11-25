@@ -1,12 +1,4 @@
----
-title: SixEyesDNS
-short_description: Detecção educacional de túneis DNS com autoencoders
-sdk: gradio
-sdk_version: 6.32.0
-app_file: app.py
-pinned: false
-license: mit
----
+
 
 # SixEyesDNS
 
